@@ -24,13 +24,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare static site directory
+        run: |
+          rm -rf _site
+          mkdir -p _site/assets/aistudio _site/public/assets/aistudio _site/public/bundle
+          touch _site/.nojekyll
+          cp public/bundle/app.js _site/assets/app.js
+          cp public/bundle/index.css _site/assets/index.css
+          cp public/bundle/app.js _site/public/bundle/app.js
+          cp public/bundle/index.css _site/public/bundle/index.css
+          if [ -d public/assets/aistudio ]; then
+            cp -r public/assets/aistudio/*.svg _site/assets/aistudio/ 2>/dev/null || true
+            cp -r public/assets/aistudio/*.svg _site/public/assets/aistudio/ 2>/dev/null || true
+          fi
+          node -e '
+            const fs = require("fs");
+            let html = fs.readFileSync("index.html", "utf8");
+            html = html.replace(
+              `<script type="module" src="/src/main.tsx"></script>`,
+              `<link rel="stylesheet" href="./assets/index.css" />\n    <script type="module" src="./assets/app.js"></script>`
+            );
+            fs.writeFileSync("_site/index.html", html, "utf8");
+          '
+          ls -la _site _site/assets
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload prebuilt dist artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist'
+          path: './_site'
 
       - name: Deploy to GitHub Pages
         id: deployment
