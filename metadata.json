@@ -1,0 +1,6 @@
+{
+  "name": "Futbol Draft 2026-27",
+  "description": "Online çok oyunculu futbol kadro draftı, 38 haftalık Premier Lig kariyer modu ve canlı maç simülatörü.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

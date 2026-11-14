@@ -1,0 +1,973 @@
+import type {
+  FormationDef,
+  FormationName,
+  GameModeDef,
+  IdentityShape,
+  Player,
+  Position,
+} from '../types/game';
+
+export const LEAGUES_META = [
+  { id: 'Premier Lig', name: 'Premier Lig', country: 'İngiltere' },
+  { id: 'La Liga', name: 'La Liga', country: 'İspanya' },
+  { id: 'Serie A', name: 'Serie A', country: 'İtalya' },
+  { id: 'Bundesliga', name: 'Bundesliga', country: 'Almanya' },
+  { id: 'Ligue 1', name: 'Ligue 1', country: 'Fransa' },
+  { id: 'Liga Portugal', name: 'Liga Portugal', country: 'Portekiz' },
+  { id: 'Eredivisie', name: 'Eredivisie', country: 'Hollanda' },
+  { id: 'Trendyol Süper Lig', name: 'Trendyol Süper Lig', country: 'Türkiye' },
+  { id: 'Diğer Takımlar', name: 'Diğer Avrupa & Dünya', country: 'Uluslararası' },
+  { id: 'İkonik Takımlar', name: 'İkonik Takımlar', country: 'Efsaneler' },
+] as const;
+
+export const DATA: Record<string, [string, number][]> = {
+  // Premier Lig (21 Takım)
+  'Manchester City': [
+    ['Gianluigi Donnarumma', 89], ['Geronimo Rulli', 78], ['Marc Guehi', 85], ['Ruben Dias', 84],
+    ['Abdukodir Khusanov', 87], ['Josko Gvardiol', 87], ["Nico O'Reilly", 81], ['Rayan Ait Nouri', 80],
+    ['Matheus Nunes', 82], ['Rico Lewis', 80], ['Elliot Anderson', 86], ['Ayyoub Bouaddi', 81],
+    ['Enzo Fernandez', 87], ['Mateo Kovacic', 82], ['Rayan Cherki', 86], ['Phil Foden', 87],
+    ['Jeremy Doku', 87], ['Iliman Ndiaye', 83], ['Antonio Semenyo', 83], ['Ryan McAidoo', 77],
+    ['Erling Haaland', 91],
+  ],
+  'Arsenal': [
+    ['David Raya', 88], ['Kepa', 81], ['Illan Meslier', 81], ['William Saliba', 87],
+    ['Gabriel', 88], ['Piero Hincapie', 85], ['Ezri Konsa', 84], ['Christian Mosquera', 80],
+    ['Riccardo Calafiori', 86], ['Jurrien Timber', 83], ['Ben White', 82], ['Martin Zubimendi', 85],
+    ['Declan Rice', 90], ['Bruno Guimaraes', 85], ['Mikel Merino', 87], ['Martin Odegaard', 89],
+    ['Eberechi Eze', 84], ['Christos Tzolis', 84], ['Bukayo Saka', 88], ['Max Dowman', 78],
+    ['Noni Madueke', 84], ['Kai Havertz', 83], ['Viktor Gyokeres', 86],
+  ],
+  'Chelsea': [
+    ['Mike Penders', 79], ['Emiliano Martinez', 88], ['Maxence Lacroix', 85], ['Levi Colwill', 83],
+    ['Wesley Fofana', 82], ['Josh Acheampong', 79], ['Aaron Anselmino', 77], ['Jorrel Hato', 83],
+    ['Pep Chavarria', 80], ['Reece James', 84], ['Marco Palestra', 80], ['Malo Gusto', 83],
+    ['Moises Caicedo', 88], ['Romeo Lavia', 83], ['Valentin Barco', 83], ['Jordan Henderson', 81],
+    ['Cole Palmer', 87], ['Morgan Rogers', 88], ['Jamie Gittens', 82], ['Estevao', 82],
+    ['Pedro Neto', 81], ['Geovany Quenda', 84], ['Joao Pedro', 89], ['Emmanuel Emegha', 80],
+    ['Danny Welbeck', 79],
+  ],
+  'Liverpool': [
+    ['Giorgi Mamardashvili', 85], ['Alisson', 85], ['Jeremy Jacquet', 84], ['Giovanni Leoni', 82],
+    ['Ronald Araujo', 82], ['Virgil Van Dijk', 85], ['Joe Gomez', 79], ['Milos Kerkez', 79],
+    ['Kostas Tsimikas', 78], ['Jeremie Frimpong', 84], ['Conor Bradley', 80], ['Ryan Gravenberch', 86],
+    ['Wataru Endo', 76], ['Alexis MacAllister', 87], ['Trey Nyoni', 83], ['Dominik Szoboszlai', 88],
+    ['Florian Wirtz', 89], ['Bradley Barcola', 87], ['Cody Gakpo', 84], ['Rio Ngumoha', 82],
+    ['Victor Munoz', 81], ['Alexander Isak', 88], ['Hugo Ekitike', 86],
+  ],
+  'Manchester United': [
+    ['Senne Lammens', 83], ['Lisandro Martinez', 82], ['Leny Yoro', 82], ['Ayden Heaven', 79],
+    ['Matthias de Ligt', 83], ['Harry Maguire', 81], ['Luke Shaw', 81], ['Diego Dalot', 80],
+    ['Noussair Mazraoui', 84], ['Carlos Baleba', 81], ['Andrey Santos', 80], ['Manuel Ugarte', 82],
+    ['Kobbie Mainoo', 84], ['Youri Tielemans', 84], ['Bruno Fernandes', 89], ['Mason Mount', 81],
+    ['Marcus Rashford', 80], ['Patrick Dorgu', 81], ['Bryan Mbeumo', 83], ['Amad Diallo', 82],
+    ['Matheus Cunha', 85], ['Benjamin Sesko', 83], ['Joshua Zirkzee', 81],
+  ],
+  'Tottenham': [
+    ['Antonin Kinsky', 76], ['Martin Dubravka', 80], ['Jan Paul van Hecke', 85], ['Micky van de Ven', 87],
+    ['Marcos Senesi', 83], ['Tosin Adarabioyo', 78], ['Ben Davies', 80], ['Destiny Udogie', 82],
+    ['Andrew Robertson', 79], ['Pedro Porro', 84], ['Archie Gray', 80], ['Sandro Tonali', 85],
+    ['Rodrigo Bentancur', 82], ['Mateus Fernandes', 83], ['Lucas Bergvall', 83], ['Conor Gallagher', 82],
+    ['Xavi Simons', 84], ['James Maddison', 84], ['Dejan Kulusevski', 82], ['Savio', 82],
+    ['Mathys Tel', 81], ['Wilson Odobert', 80], ['Mykhaylo Mudryk', 78], ['Mohamed Kudus', 84],
+    ['Omar Marmoush', 83], ['Dominic Solanke', 81], ['Richarlison', 79],
+  ],
+  'Aston Villa': [
+    ['Tammy Abraham', 81], ['Ross Barkley', 82], ['Marco Bizot', 80], ['Lamare Bogarde', 80],
+    ['Emiliano Buendia', 84], ['Matty Cash', 82], ['Pau Torres', 82], ['Alejandro Garnacho', 80],
+    ['Joao Gomes', 81], ['Leon Goretzka', 77], ['Taylor Harwood Bellis', 79], ['Nicolas Jackson', 85],
+    ['Boubacar Kamara', 83], ['Ian Maatsen', 82], ['John McGinn', 84], ['Tyrone Mings', 81],
+    ['Amadou Onana', 80], ['Victor Lindelof', 82], ['Matteo Ruggeri', 83], ['Zion Suzuki', 82],
+    ['Aaron Wan Bissaka', 81],
+  ],
+  'Bournemouth': [
+    ['Amine Adli', 80], ['Julian Araujo', 78], ['David Brooks', 76], ['Ryan Christie', 78],
+    ['Lewis Cook', 77], ['Evanilson', 83], ['Michele Di Gregorio', 83], ['Bafode Diakite', 81],
+    ['James Hill', 80], ['Daniel Jebbison', 76], ['Justin Kluivert', 83], ['Antonio Silva', 84],
+    ['Djordje Petrovic', 81], ['Alvaro Rodriguez', 79], ['Juanlu Sanchez', 77], ['Alex Scott', 86],
+    ['Adam Smith', 80], ['Marcus Tavernier', 82], ['Adrien Truffert', 82],
+  ],
+  'Brentford': [
+    ['Kristoffer Ajer', 84], ['Jaidon Anthony', 80], ['Nathan Collins', 81], ['Mikkel Damsgaard', 83],
+    ['Josh Dasilva', 80], ['El Hadji Malick Diouf', 81], ['Fabio Carvalho', 75], ['Rico Henry', 77],
+    ['Aaron Hickey', 78], ['Vitaly Janelt', 79], ['Mathias Jensen', 80], ['Michael Kayode', 83],
+    ['Caoimhin Kelleher', 78], ['Keane Lewis Potter', 81], ['Igor Thiago', 86], ['Dango Ouattara', 84],
+    ['Mamadou Sangare', 83], ['Kevin Schade', 86], ['Hakon Valdimarsson', 79], ['Sepp van den Berg', 81],
+    ['Callum Wilson', 81], ['Yehor Yarmoliuk', 82], ['Jannik Schuster', 82],
+  ],
+  'Brighton': [
+    ['Yasin Ayari', 83], ['James Beadle', 74], ['Olivier Boscagli', 79], ['Promise David', 76],
+    ['Maxim De Cuyper', 83], ['Lewis Dunk', 82], ['Evan Ferguson', 77], ['Diego Gomez', 81],
+    ['Pascal Gross', 84], ['Jaouen Hadjam', 78], ['Ferdi Kadioglu', 82], ['Yankuba Minteh', 85],
+    ['Kaoru Mitoma', 82], ["Matt O'Riley", 80], ['Ibrahim Osman', 79], ['Georginio Rutter', 80],
+    ['Jason Steele', 81], ['Pascal Struijk', 83], ['Michael Svoboda', 75], ['Bart Verbruggen', 79],
+    ['Luka Vuskovic', 88], ['Mats Wieffer', 81],
+  ],
+  'Coventry City': [
+    ['Aurele Amenda', 78], ['Taiwo Awoniyi', 76], ['Dan Bentley', 74], ['Jay Dasilva', 79],
+    ['Josh Eccles', 77], ['Matt Grimes', 78], ['Gustavo Hamer', 80], ['Kaine Kesler-Hayden', 79],
+    ['Frank Onyeka', 81], ['Victor Torp', 78], ['Ethan Pinnock', 77], ['Jack Rudoni', 74],
+    ['Carl Rushworth', 81], ['Tatsuhiro Sakamoto', 72], ['Ellis Simms', 73], ['Loum Tchaouna', 74],
+    ['Bobby Thomas', 74], ['Brandon Thomas Asante', 75], ['Caleb Yirenkyi', 80], ['Milan van Ewijk', 81],
+    ['Haji Wright', 80],
+  ],
+  'Crystal Palace': [
+    ['Walter Benitez', 82], ['Ben Chilwell', 81], ['Axel Disasi', 80], ['Cheick Doucoure', 82],
+    ['Matheus Franca', 77], ['Evann Guessand', 79], ['Dean Henderson', 83], ['Will Hughes', 81],
+    ['Daichi Kamada', 83], ['Anan Khalaili', 78], ['Jorgen Strand Larsen', 79], ['Jefferson Lerma', 81],
+    ['Jean-Philippe Mateta', 84], ['Dwight McNeil', 81], ['Oscar Mingueza', 80], ['Tyrick Mitchell', 82],
+    ['Eddie Nketiah', 81], ['Dario Osorio', 80], ['Yeremy Pino', 81], ['Chris Richards', 82],
+    ['Ismaila Sarr', 83], ['Quinten Timber', 79], ['Takehiro Tomiyasu', 77], ['Adam Wharton', 86],
+  ],
+  'Everton': [
+    ['Carlos Alcaraz', 78], ['Thierno Barry', 85], ['Christian Norgaard', 83], ['Jarrad Branthwaite', 83],
+    ['Kiernan Dewsbury-Hall', 82], ['James Garner', 82], ['Jack Grealish', 84], ['Hayden Hackney', 82],
+    ['Brennan Johnson', 81], ['Michael Keane', 79], ['Ainsley Maitland-Niles', 77], ['Vitalii Mykolenko', 79],
+    ["Jake O'Brien", 80], ['Jordan Pickford', 83], ['Merlin Rohl', 80], ['James Tarkowski', 81],
+    ['Mark Travers', 76],
+  ],
+  'Fulham': [
+    ['David Affengruber', 80], ['Joachim Andersen', 82], ['Calvin Bassey', 78], ['Sander Berge', 84],
+    ['Oscar Bobb', 81], ['Tom Cairney', 76], ['Timothy Castagne', 76], ['Shea Charles', 74],
+    ['Jorge Cuenca', 77], ['Gonzalo Garcia', 78], ['Alex Iwobi', 77], ['Hugo Larsson', 78],
+    ['Benjamin Lecomte', 72], ['Bernd Leno', 74], ['Rodrigo Muniz', 76], ['Cesar Palacios', 71],
+    ['Harrison Reed', 73], ['Antonee Robinson', 82], ['Kevin', 79], ['Ryan Sessegnon', 76],
+    ['Emile Smith Rowe', 75], ['Kenny Tete', 72],
+  ],
+  'Hull City': [
+    ['Semi Ajayi', 72], ['Mohamed Belloumi', 73], ['Jack Butland', 72], ['Mohamed-Ali Cho', 74],
+    ['Lewie Coyle', 71], ['Matt Crooks', 71], ['John Egan', 69], ['Joe Gelhardt', 69],
+    ['Ryan Giles', 68], ['Lucas Gourna-Douath', 71], ['Charlie Hughes', 66], ['Tim Iroegbunam', 73],
+    ['Oliver McBurnie', 79], ['Patrick McNair', 78], ['Nobel Mendy', 74], ['Hidemasa Morita', 82],
+    ['Brooke Norton-Cuffy', 75], ['Abdulkadir Omur', 73], ['Regan Slater', 71], ['Elliot Stroud', 79],
+    ['Matt Targett', 80], ['Konstantinos Tzolakis', 83],
+  ],
+  'Ipswich Town': [
+    ['Chuba Akpom', 74], ['Jack Clarke', 75], ['Emersonn', 72], ['Leif Davis', 78],
+    ['Issa Diop', 81], ['Julio Enciso', 81], ['Abdul Fatawu', 80], ['Zian Flemming', 78],
+    ['Darnell Furlong', 77], ['Jacob Greaves', 79], ['Cedric Kipre', 71], ['Sasa Lukic', 75],
+    ['Daizen Maeda', 76], ['Azor Matusiwa', 71], ['Kasey McAteer', 70], ['Anis Mehmeti', 71],
+    ['Florentino', 81], ['Marcelino Nunez', 80], ["Dara O'Shea", 75], ['Exequiel Palacios', 79],
+    ['Jaden Philogene', 76], ['Kjell Scherpen', 72], ['Jack Taylor', 70],
+  ],
+  'Leeds United': [
+    ['Brenden Aaronson', 81], ['Ethan Ampadu', 82], ['Melvin Bard', 81], ['Jaka Bijol', 82],
+    ['Jayden Bogle', 81], ['Dominic Calvert-Lewin', 84], ['Nico Elvedi', 83], ['Ilia Gruev', 78],
+    ['Gabriel Gudmundsson', 76], ['Daniel James', 74], ['Mateo Joseph', 72], ['James Justin', 71],
+    ['Sean Longstaff', 73], ['Tarik Muharemovic', 83], ['Lukas Nmecha', 81], ['Noah Okafor', 80],
+    ['Joe Rodon', 80], ['Anton Stach', 78], ['Ao Tanaka', 79], ['James Trafford', 82],
+    ['Harry Wilson', 83], ['Michael Zetterer', 74],
+  ],
+  'Newcastle United': [
+    ['Joelinton', 79], ['Harvey Barnes', 83], ['Sven Botman', 82], ['Dan Burn', 81],
+    ['Amar Dedic', 84], ['Anthony Elanga', 82], ['Mark Gillespie', 74], ['Nicolas Gonzalez', 82],
+    ['Lewis Hall', 85], ['Lukas Hornicek', 82], ['Tino Livramento', 81], ['Jacob Murphy', 80],
+    ['William Osula', 79], ['Nick Pope', 83], ['Jacob Ramsey', 83], ['Fabian Schar', 82],
+    ['Malick Thiaw', 81], ['Joe Willock', 79], ['Yoane Wissa', 80],
+  ],
+  'Nottingham Forest': [
+    ['Ola Aina', 81], ['Murillo', 80], ['Liam Delap', 82], ['Ousmane Diomande', 82],
+    ['Nicolas Dominguez', 81], ['Morgan Gibbs-White', 86], ['Callum Hudson-Odoi', 82], ['Arnaud Kalimuendo', 83],
+    ['Igor Jesus', 81], ['John Victor', 79], ['James McAtee', 77], ['Nikola Milenkovic', 79],
+    ['Daniel Munoz', 82], ['Dan Ndoye', 80], ['Luca Netz', 75], ['Felipe', 77],
+    ['Ibrahim Sangare', 79], ['Nicolo Savona', 78], ['Xaver Schlager', 81], ['Matz Sels', 80],
+    ['Neco Williams', 80], ['Chris Wood', 75], ['Ryan Yates', 72],
+  ],
+  'Sunderland': [
+    ['Omar Alderete', 81], ['Ajibola Alese', 78], ['Abdoullah Ba', 79], ['Dan Ballard', 81],
+    ['Brian Brobbey', 82], ['Kevin Danso', 80], ['Habib Diarra', 81], ['Trai Hume', 82],
+    ['Wilson Isidor', 80], ['Enzo Le Fee', 79], ['Reinildo Mandava', 76], ['Thomas Meunier', 72],
+    ['Nordi Mukiele', 73], ['Romaine Mundle', 72], ["Luke O'Nien", 73], ['Nilson Angulo', 74],
+    ['Robin Roefs', 71], ['Noah Sadiki', 75], ['Granit Xhaka', 85],
+  ],
+  'West Ham United': [
+    ['Mads Hermansen', 81], ['Kostas Mavropanos', 82], ['Morato', 83], ['Max Kilman', 81],
+    ['Oliver Scarles', 78], ['Klye Walker Peters', 78], ['Joel Veltman', 81], ['Edson Alvarez', 79],
+    ['Tomas Soucek', 79], ['Arne Engels', 77], ['Edvin Austbo', 80], ['Manor Solomon', 82],
+    ['Max Cornet', 80], ['Jarrod Bowen', 83], ['Taty Castellanos', 82], ['Pablo', 79],
+    ['Joel Piroe', 78],
+  ],
+
+  // La Liga (4 Takım)
+  'Real Madrid': [
+    ['Thibaut Courtois', 87], ['Andriy Lunin', 82], ['Dean Huijsen', 86], ['Ibrahima Konate', 85],
+    ['Raul Asencio', 84], ['Eder Militao', 83], ['Antonio Rudiger', 85], ['Marc Cucurella', 85],
+    ['Alvaro Carreras', 82], ['Trent Alexander Arnold', 84], ['Denzel Dumfries', 86], ['Aurelien Tchouameni', 85],
+    ['Federico Valverde', 88], ['Eduardo Camavinga', 85], ['Jude Bellingham', 90], ['Arda Güler', 89],
+    ['Bernardo Silva', 86], ['Vinicius Junior', 90], ['Yan Diomande', 88], ['Rodrygo', 84],
+    ['Brahim Diaz', 84], ['Kylian Mbappe', 91], ['Endrick', 83], ['Carlos Espi', 82],
+  ],
+  'Barcelona': [
+    ['Joan Garcia', 85], ['Pau Cubarsi', 88], ['Eric Garcia', 82], ['Gerard Martin', 83],
+    ['Andreas Christensen', 81], ['Alejandro Balde', 81], ['Jules Kounde', 85], ['Xavi Espart', 83],
+    ['Joao Cancelo', 87], ['Rodri', 90], ['Marc Bernal', 81], ['Pedri', 89],
+    ['Gavi', 82], ['Frenkie de Jong', 82], ['Fermin Lopez', 88], ['Dani Olmo', 87],
+    ['Anthony Gordon', 85], ['Lamine Yamal', 92], ['Karim Adeyemi', 86], ['Raphinha', 90],
+    ['Gabriel Jesus', 85],
+  ],
+  'Atletico Madrid': [
+    ['Jan Oblak', 85], ['Marc Pubill', 85], ['Cristian Romero', 86], ['David Hancko', 85],
+    ['Robin Le Normand', 84], ['Alejandro Grimaldo', 86], ['Marcos Llorente', 84], ['Morten Hjulmand', 83],
+    ['Pablo Barrios', 84], ['Koke', 82], ['Kangin Lee', 82], ['Alex Baena', 86],
+    ['Ademola Lookman', 84], ['Guiliano Simeone', 84], ['Julian Alvarez', 88], ['Jonathan David', 87],
+    ['Alexander Sorloth', 80],
+  ],
+  'Villarreal': [
+    ['Luiz Junior', 81], ['Renato Veiga', 84], ['Pau Navarro', 82], ['Juan Foyth', 83],
+    ['Sergi Cardona', 80], ['Carlos Romero', 77], ['Santiago Mourino', 78], ['Alex Freeman', 76],
+    ['Pape Gueye', 84], ['Nathan Saliba', 81], ['Santi Comesana', 80], ['Alberto Moleiro', 81],
+    ['Tajon Buchanan', 82], ['Nicolas Pepe', 76], ['Georges Mikautadze', 79], ['Ayoze Perez', 79],
+  ],
+
+  // Serie A (9 Takım)
+  'Como': [
+    ['Robert Sanchez', 83], ['Jacobo Ramon', 86], ['Marc Oliver Kempf', 82], ['Trevoh Chalobah', 81],
+    ['Alex Valle', 81], ['Yan Couto', 83], ['Maxime Perrone', 80], ['Samuele Ricci', 81],
+    ['Lucas Da Cunha', 84], ['Maxence Caqueret', 82], ['Nico Paz', 89], ['Martin Baturina', 87],
+    ['Assane Diao', 81], ['Jesus Rodriguez', 83], ['Jayden Addai', 82], ['Moise Kean', 83],
+    ['Anastasios Douvikas', 85],
+  ],
+  'Inter': [
+    ['Josep Martinez', 81], ['Ivan Provedel', 80], ['Alessandro Bastoni', 86], ['Yann Bisseck', 83],
+    ['Manuel Akanji', 82], ['John Stones', 84], ['Benjamin Pavard', 81], ['Federico Dimarco', 86],
+    ['Carlos Augusto', 80], ['Djed Spence', 81], ['Aleksandar Stankovic', 82], ['Hakan Calhanoglu', 84],
+    ['Nicolo Barella', 87], ['Petar Sucic', 85], ['Curtis Jones', 81], ['Andy Diouf', 80],
+    ['Piotr Zielinski', 84], ['Henrikh Mkhitaryan', 79], ['Luis Henrique', 82], ['Lautaro Martinez', 87],
+    ['Marcus Thuram', 88], ['Pio Esposito', 82], ['Ange Yoan Bonny', 81],
+  ],
+  'Juventus': [
+    ['Kamil Grabara', 81], ['Guglielmo Vicario', 83], ['Bremer', 83], ['Pierre Kalulu', 78],
+    ['Lloyd Kelly', 77], ['Jhon Lucumi', 78], ['Federico Gatti', 79], ['Andrea Cambiaso', 78],
+    ['Juan Cabal', 77], ['Zeki Celik', 80], ['Manuel Locatelli', 84], ['Khephren Thuram', 81],
+    ['Weston McKennie', 82], ['Pape Matar Sarr', 81], ['Douglas Luiz', 82], ['Teun Koopmeiners', 84],
+    ['Kenan Yildiz', 85], ['Kerim Alajbegovic', 83], ['Nico Gonzalez', 82], ['Jeremie Boga', 81],
+    ['Francisco Conceicao', 83], ['Edon Zhegrova', 80], ['Nick Woltemade', 84], ['Randal Kolo Muani', 82],
+    ['Jeff Ekhator', 77],
+  ],
+  'Milan': [
+    ['Mike Maignan', 86], ['Strahinja Pavlovic', 83], ['Koni De Winter', 82], ['Mario Gila', 82],
+    ['Matteo Gabbia', 81], ['Fikayo Tomori', 81], ['Davide Bartesaghi', 83], ['Pervis Estupinan', 84],
+    ['Ardon Jashari', 81], ['Adrien Rabiot', 82], ['Yunus Musah', 77], ['Luka Modric', 81],
+    ['Ruben Loftus Cheek', 79], ['Diego Moreira', 82], ['Alphadjo Cisse', 79], ['Alexis Saelemaekers', 78],
+    ['Christian Pulisic', 83], ['Omari Hutchinson', 77], ['Samuel Chukwueze', 78], ['Goncalo Ramos', 86],
+    ['Francesco Camarda', 80],
+  ],
+  'Roma': [
+    ['Mile Svilar', 85], ['Evan Ndicka', 82], ['Kostas Koulierakis', 83], ['Gianluca Mancini', 83],
+    ['Leonardo Balerdi', 80], ['Mario Hermoso', 79], ['Wesley', 82], ['Nahuel Molina', 82],
+    ['Devyne Rensch', 80], ['Bryan Cristante', 81], ['Marten de Roon', 81], ['Manu Kone', 85],
+    ['Nicolo Pisilli', 80], ['Rodrigo Mora', 82], ['Lorenzo Pellegrini', 84], ['Matias Soule', 83],
+    ['Paulo Dybala', 84], ['Donyell Malen', 86], ['Santiago Castro', 79],
+  ],
+  'Atalanta': [
+    ['Marco Carnesecchi', 83], ['Giorgi Scalvini', 83], ['Isak Hien', 82], ['Odilon Kossounou', 82],
+    ['Sead Kolasinac', 81], ['Raoul Bellanova', 80], ['Davide Zappacosta', 79], ['Ederson da Silva', 84],
+    ['Franck Kessie', 82], ['Mario Pasalic', 80], ['Nicola Zalewski', 81], ['Charles De Ketelaere', 86],
+    ['Lazar Samardzic', 83], ['Eljif Elmas', 82], ['Jonathan Rowe', 82], ['Kamaldeen Sulemana', 79],
+    ['Giacomo Raspadori', 80], ['Nikola Krstovic', 82], ['Gianluca Scamacca', 83],
+  ],
+  'Napoli': [
+    ['Vanja Milinkovic Savic', 81], ['Alex Meret', 78], ['Alessandro Buongiorno', 79], ['Sam Beukema', 80],
+    ['Rafa Marin', 78], ['Benoit Badiashile', 82], ['Mathias Olivera', 81], ['Leandro Spinazzola', 80],
+    ['Giovanni di Lorenzo', 79], ['Billy Gilmour', 82], ['Stanislav Lobotka', 81], ['Scott McTominay', 86],
+    ['Frank Anguissa', 85], ['Kevin De Bruyne', 87], ['Alisson Santos', 81], ['Noa Lang', 81],
+    ['David Neres', 82], ['Matteo Politano', 83], ['Rasmus Hojlund', 84], ['Lorenzo Lucca', 80],
+  ],
+  'Fiorentina': [
+    ['David de Gea', 82], ['Radu Dragusin', 80], ['Marin Pongracic', 79], ['Fabiano Parisi', 79],
+    ['Alex Jimenez', 77], ['Dodo', 81], ['Joao Mario', 78], ['Christ Oulai', 79],
+    ['Cher Ndour', 80], ['Nicolo Fagioli', 81], ['Marco Brescianni', 76], ['Pedro Goncalves', 84],
+    ['Franco Mastantuono', 84], ['Wilfried Gnonto', 79], ['Beto', 81],
+  ],
+  'Lazio': [
+    ['Christos Mandas', 80], ['Oliver Provstgaard', 75], ['Danilho Doekhi', 79], ['Diogo Leite', 77],
+    ['Josip Sutalo', 81], ['Nuno Tavares', 82], ['Luca Pellegrini', 80], ['Adam Marusic', 74],
+    ['Manuel Lazzari', 73], ['Nicolo Rovella', 79], ['Daniel Cataldi', 72], ['Kenneth Taylor', 81],
+    ['Davide Frattesi', 83], ['Fisayo Dele Bashiru', 70], ['Tijjani Noslin', 79], ['Mattia Zaccagni', 82],
+    ['Gustav Isaksen', 80], ['Matteo Cancellieri', 80], ['Albert Gudmundsson', 81], ['Andrea Pinamonti', 82],
+  ],
+
+  // Bundesliga (5 Takım)
+  'Bayern Munchen': [
+    ['Jonas Urbig', 82], ['Manuel Neuer', 82], ['Dayot Upamecano', 85], ['Jonathan Tah', 85],
+    ['Kim Min Jae', 84], ['Hiroki Ito', 82], ['Nathaniel Brown', 83], ['Alphonso Davies', 83],
+    ['Josip Stanisic', 82], ['Konrad Laimer', 86], ['Sacha Boey', 81], ['Aleksandar Pavlovic', 86],
+    ['Joshua Kimmich', 87], ['Tom Bischof', 83], ['Jamal Musiala', 89], ['Lennart Karl', 85],
+    ['Ismael Saibari', 87], ['Luis Diaz', 88], ['Michael Olise', 91], ['Serge Gnabry', 84],
+    ['Harry Kane', 93],
+  ],
+  'Borussia Dortmund': [
+    ['Gregor Kobel', 88], ['Nico Schlotterbeck', 88], ['Joane Gadou', 80], ['Waldemar Anton', 83],
+    ['Ramy Bensebaini', 82], ['Daniel Svensson', 80], ['Julian Ryerson', 84], ['Felix Nmecha', 83],
+    ['Jobe Bellingham', 82], ['Joey Veerman', 85], ['Marcel Sabitzer', 85], ['Ethan Nwaneri', 81],
+    ['Kostas Karetsas', 80], ['Giannis Konstantelias', 79], ['Max Beier', 82], ['Serhou Guirassy', 86],
+    ['Fabio Silva', 85],
+  ],
+  'Bayer Leverkusen': [
+    ['Mark Flekken', 82], ['Jarrel Quansah', 81], ['Edmond Tapsoba', 84], ['Facundo Medina', 83],
+    ['Miguel Gutierrez', 83], ['Lucaz Vazquez', 80], ['Robert Andrich', 82], ['Ibrahim Maza', 86],
+    ['Aleix Garcia', 83], ['Malik Tillman', 83], ['Jonas Hofmann', 84], ['Afonso Moreira', 79],
+    ['Elisse Ben Seghir', 79], ['Moussa Diaby', 81], ['Martin Terrier', 80], ['Christian Kofane', 84],
+    ['Patrik Schick', 82],
+  ],
+  'RB Leipzig': [
+    ['Maarten Vandervoort', 78], ['Castello Lukeba', 83], ['Maxime Esteve', 81], ['Willi Orban', 82],
+    ['Lukas Klostermann', 80], ['David Raum', 81], ['Ridle Baku', 78], ['Nicolas Seiwald', 79],
+    ['Neil El Aynaoui', 80], ['Ezechiel Banzuzi', 80], ['Christoph Baumgartner', 84], ['Rocco Reitz', 81],
+    ['Brajan Gruda', 82], ['Antonio Nusa', 87], ['Johan Bakayoko', 81], ['Romulo', 83],
+    ['Christhoper Nkunku', 85],
+  ],
+  'Freiburg': [
+    ['Mio Backhaus', 77], ['Florian Muller', 75], ['Bruno Ogbus', 76], ['Philipp Lienhart', 84],
+    ['Max Rosenfelder', 81], ['Matthias Ginter', 82], ['Jordy Makengo', 78], ['Christian Gunter', 80],
+    ['Philipp Treu', 80], ['Lukas Kubler', 79], ['Yannick Engelhardt', 82], ['Max Eggestein', 81],
+    ['Vincenzo Grifo', 84], ['Nikolas Beste', 83], ['Yuito Suzuki', 83], ['Igor Matanovic', 84],
+    ['Keisuke Goto', 79], ['Lucas Holer', 78],
+  ],
+
+  // Ligue 1 (2 Takım)
+  'PSG': [
+    ['Matvey Safonov', 83], ['Lucas Chevalier', 82], ['Willian Pacho', 86], ['Ilya Zabarnyi', 84],
+    ['Marquinhos', 89], ['Lucas Beraldo', 83], ['Nuno Mendes', 90], ['Lucas Hernandez', 82],
+    ['Lucas Digne', 83], ['Achraf Hakimi', 90], ['Vitinha', 90], ['Joao Neves', 89],
+    ['Warren Zaire Emery', 86], ['Senny Mayulu', 79], ['Fabian Ruiz', 88], ['Dro Fernandez', 78],
+    ['Khvicha Kvaratskhelia', 89], ['Mika Godts', 84], ['Desire Doue', 90], ['Ousmane Dembele', 91],
+    ['Ferran Torres', 85],
+  ],
+  'Monaco': [
+    ['Philipp Kohn', 81], ['Lukas Hradecky', 83], ['Christian Mawissa', 80], ['Mohammed Salisu', 82],
+    ['Eric Dier', 82], ['Vanderson', 83], ['Jordan Teze', 79], ['Denis Zakaria', 81],
+    ['Lamine Camara', 85], ['Aleksandr Golovin', 81], ['Ansu Fati', 82], ['Takumi Minamino', 80],
+    ['Folarin Balogun', 82], ['Mika Biereth', 77], ['Paris Brunner', 83],
+  ],
+
+  // Liga Portugal (3 Takım)
+  'Porto': [
+    ['Diogo Costa', 87], ['Jakub Kiwior', 83], ['Jan Bednarek', 83], ['Neuhen Perez', 82],
+    ['Francisco Moura', 81], ['Zaidu Sanusi', 79], ['Alberto Costa', 78], ['Martim Fernandes', 76],
+    ['Alan Varela', 80], ['Pablo Rosario', 81], ['Victor Froholdt', 85], ['Seko Fofana', 81],
+    ['In Beom Hwang', 81], ['Gabri Veiga', 84], ['Oskar Pietuszewski', 80], ['Borja Sainz', 80],
+    ['William Gomes', 81], ['Eduardo Pepe', 81], ['Samu Aghehowa', 82], ['Santiago Gimenez', 80],
+    ['Andre Silva', 79],
+  ],
+  'Benfica': [
+    ['Anatoliy Trubin', 85], ['Tomas Araujo', 81], ['Alessandro Circati', 80], ['Clement Lenglet', 81],
+    ['Samuel Dahl', 77], ['Alexander Bah', 79], ['Joao Palhinha', 83], ['Enzo Barrenechea', 80],
+    ['Leandro Barreiro', 78], ['Fredrik Aursnes', 84], ['Georgiy Sudakov', 81], ['Claudio Echeverri', 78],
+    ['Andreas Schjelderup', 85], ['Jakub Kaminski', 80], ['Gianluca Prestianni', 85], ['Dodi Lukebakio', 83],
+    ['Rafa Silva', 81], ['Vangelis Pavlidis', 86], ['Jhon Duran', 81],
+  ],
+  'Sporting': [
+    ['Rui Silva', 83], ['Goncalo Inacio', 84], ['Zeno Debast', 82], ['Eduardo Quaresma', 82],
+    ['Ibrahima Ba', 80], ['Maxi Araujo', 84], ['Nuno Santos', 80], ['Ivan Fresneda', 81],
+    ['Georgios Vagiannidis', 79], ['Sergi Altimira', 80], ['Silas Andersen', 78], ['Issa Doumbia', 77],
+    ['Joao Simoes', 80], ['Rodrigo Zalazar', 84], ['Nestory Irankunda', 77], ['Flavio Gonçalves', 81],
+    ['Geny Catamo', 82], ['Luis Guilherme', 80], ['Luis Javier Suarez', 86], ['Fotis Ioannidis', 83],
+  ],
+
+  // Eredivisie (3 Takım)
+  'Ajax': [
+    ['Marc Andre Ter Stegen', 82], ['Youri Baas', 82], ['Thilo Kehrer', 80], ['Aaron Bouwman', 79],
+    ['Daley Blind', 79], ['Caio Henrique', 78], ['Owen Wijndal', 77], ['Lucas Rosa', 75],
+    ['Anton Gaaei', 73], ['Jorthy Mokio', 83], ['Yves Bissouma', 80], ['Sofyan Amrabat', 81],
+    ['Davy Klaasen', 82], ['Oscar Gloukh', 83], ['Julian Brandt', 84], ['Abdellah Ouazane', 83],
+    ['Simon Adingra', 82], ['Viktor Tsygankov', 81], ['Steven Berghuis', 80], ['Tolu Arokodare', 83],
+    ['Marcos Leonardo', 81], ['Kasper Dolberg', 79],
+  ],
+  'PSV': [
+    ['Matej Kovar', 78], ['Lutsharel Geertruida', 82], ['Yarek Gasiorowski', 80], ['Ryan Flamingo', 81],
+    ['Mauro Junior', 79], ['Filip Kostic', 79], ['Serginio Dest', 80], ['Kodai Sano', 79],
+    ['Jerdy Schouten', 82], ['Paul Wanner', 79], ['Guus Til', 83], ['Sven Mijnans', 83],
+    ['Ruben van Bommel', 82], ['Esmir Bajraktarevic', 81], ['Ivan Perisic', 83], ['Ricardo Pepi', 80],
+    ['Mikkel Bro Hansen', 72],
+  ],
+  'Feyenoord': [
+    ['Tjark Ernst', 79], ['Mika Marmol', 78], ['Tsuyohi Watanabe', 77], ['Jeremiah Juste', 79],
+    ['Jordan Bos', 82], ['Givario Read', 84], ['Charles Vanhoutte', 79], ['Jakub Moder', 80],
+    ['Gjivai Zechiel', 80], ['Sem Steijn', 81], ['Hadji Moussa', 82], ['Reiss Nelson', 78],
+    ['Luciano Valente', 83], ['Nacho Ferri', 80],
+  ],
+
+  // Trendyol Süper Lig (4 Takım)
+  'Galatasaray': [
+    ['Ugurcan Cakir', 83], ['Davinson Sanchez', 83], ['Abdulkerim Bardakci', 82], ['Arda Unyay', 73],
+    ['Ismail Jakobs', 80], ['Eren Elmali', 77], ['Wilfried Singo', 82], ['Roland Sallai', 79],
+    ['Lesley Ugochukwu', 79], ['Lucas Torreira', 84], ['Mario Lemina', 83], ['Gabriel Sara', 82],
+    ['Renato Nhaga', 78], ['Aleksey Batrakov', 85], ['Rafael Leao', 84], ['Baris Alper Yilmaz', 84],
+    ['Yunus Akgun', 82], ['Leroy Sane', 80], ['Victor Osimhen', 88], ['Deniz Gul', 78],
+  ],
+  'Fenerbahce': [
+    ['Ederson', 81], ['Jayden Oosterwolde', 79], ['Kojo Oppong', 80], ['Nathan Ake', 82],
+    ['Milan Skriniar', 80], ['Archie Brown', 83], ['Levent Mercan', 79], ['Mert Muldur', 78],
+    ['Nelson Semedo', 80], ['Ismail Yuksek', 81], ['Ngolo Kante', 82], ['Matteo Guendouzi', 80],
+    ['Marco Asensio', 84], ['Irfan Can Kahveci', 81], ['Kerem Akturkoglu', 79], ['Oguz Aydin', 80],
+    ['Mason Greenwood', 85], ['Romelu Lukaku', 84], ['Vedat Muriqi', 82], ['Dorgeles Nene', 78],
+  ],
+  'Besiktas': [
+    ['Alexander Nubel', 82], ['Emmanuel Agbadou', 82], ['Emirhan Topcu', 80], ['Tiago Djalo', 81],
+    ['Yasin Ozcan', 78], ['Kassoum Ouattara', 77], ['Ridvan Yilmaz', 79], ['Amir Murillo', 82],
+    ['Taylan Bulut', 77], ['Wilfred Ndidi', 80], ['Salih Ozcan', 81], ['Orkun Kokcu', 84],
+    ['Fabio Miretti', 80], ['Junior Olaitan', 82], ['Leandro Trossard', 85], ['Ilhan Fakili', 80],
+    ['Ernest Poku', 81], ['Vaclav Cerny', 81], ['Dusan Vlahovic', 83], ['Oh Hyeon Gyu', 80],
+    ['Semih Kilicsoy', 76],
+  ],
+  'Trabzonspor': [
+    ['Andre Onana', 82], ['Chibuike Nwaiwu', 82], ['Arseniy Batagov', 79], ['Cenk Ozkacar', 77],
+    ['Samet Akaydin', 76], ['Stefan Savic', 80], ['Sidny Lopes Cabral', 81], ['Mustafa Eskihellac', 77],
+    ['Wagner Pina', 79], ['Fabinho', 83], ['Batista Mendy', 78], ['Melih Kabasakal', 79],
+    ['Ozan Tufan', 79], ['Ernest Muci', 82], ['Ruslan Malinovskyi', 80], ['Aral Simsir', 83],
+    ['Noah Saviolo', 79], ['Mohamed Salah', 88], ['Franculino Dju', 80], ['Paul Onuachu', 81],
+  ],
+
+  // Diğer Avrupa & Dünya Takımları (8 Takım)
+  'Club Brugge': [
+    ['Yann Sommer', 83], ['Joel Ordonez', 83], ['Jorne Spileers', 80], ['Brandon Mechele', 84],
+    ['Joaquin Seys', 85], ['Kyriani Sabbe', 82], ['Freddie Potts', 81], ['Hugo Vetlesen', 84],
+    ['Hans Vanaken', 86], ['Jan Virgili', 82], ['Mamadou Diakhon', 80], ['Wisdom Mike', 78],
+    ['Carlos Forbs', 87], ['Nicolo Tresoldi', 88], ['Romeo Vermant', 79],
+  ],
+  'RB Salzburg': [
+    ['Christian Zawieschitzky', 77], ['Kevin Boma', 81], ['Valentin Zabransky', 82], ['Nikolas Veratschnig', 82],
+    ['Dominik Schmid', 80], ['Bartosz Mazurek', 86], ['Sota Kitano', 81], ['Jesper Lindstrom', 83],
+    ['Yorbe Vertessen', 79], ['Edmund Baidoo', 78], ['Karim Konate', 82], ['Haris Tabakovic', 84],
+  ],
+  'Bodo Glimt': [
+    ['Nikita Haikin', 81], ['Odin Bjortuft', 80], ['Villads Nielsen', 75], ['Jostein Gundersen', 79],
+    ['Haitam Aleesami', 74], ['Fredrik Bjorkan', 81], ['Isak Maata', 79], ['Fredrik Sjovold', 82],
+    ['Patrick Berg', 85], ['Joshua Kitolano', 80], ['Hakon Evjen', 83], ['Sondre Auklend', 77],
+    ['Sondre Fet', 80], ['Ulrik Saltnes', 76], ['Jens Hauge', 85], ['Ole Blomberg', 79],
+    ['Joel Mvuka', 74], ['Ola Brynhildsen', 77], ['Andreas Helmersen', 78],
+  ],
+  'Olympiacos': [
+    ['Stefan Ortega', 81], ['Lorenzo Pirola', 76], ['David Carmo', 80], ['Panagiotis Retsos', 77],
+    ['Nair Tiknizyan', 74], ['Marcus Pedersen', 76], ['Santiago Hezze', 82], ['Gustavo Puerta', 78],
+    ['Remo Freuler', 81], ['Gustavo Sa', 80], ['Kostas Fortounis', 79], ['Jota Silva', 77],
+    ['Leon Bailey', 83], ['Gelson Martins', 78], ['Armando Gonzalez', 82], ['Roman Yaremchuk', 79],
+  ],
+  'Celtic': [
+    ['Sam Johnstone', 78], ['Cameron Carter Vickers', 77], ['Auston Trusty', 79], ['Liam Scales', 78],
+    ['Kieran Tierney', 79], ['Alstair Johnston', 81], ['Colby Donovan', 74], ['Jordan Lotomba', 80],
+    ['Callum McGregor', 82], ['Mika Baur', 81], ['Oliver Sorensen', 75], ['Benjamin Nygren', 83],
+    ['Jota', 80], ['Hyun Jun Yang', 79], ['James Forrest', 73], ['Kasper Hogh', 83],
+    ['Camilo Duran', 82],
+  ],
+  'Rangers': [
+    ['Ivor Pandur', 75], ['Emmanuel Fernandez', 79], ['Ben Godfrey', 78], ['John Souttar', 76],
+    ['Kosta Nedeljkovic', 81], ['Nicolas Raskin', 83], ['Tobi Chukwuani', 78], ['Dan Neil', 79],
+    ['Cammy Devlin', 74], ['Djeidi Gassama', 76], ['Badredine Bouanani', 77], ['Youssef Chermiti', 83],
+    ['Lawrence Shankland', 75], ['Ryan Naderi', 77],
+  ],
+  'Flamengo': [
+    ['Augustin Rossi', 82], ['Andrew', 78], ['Leo Ortiz', 79], ['Leo Pereira', 79],
+    ['Vitao', 78], ['Ayrton Lucas', 78], ['Alex Sandro', 80], ['Emerson Royal', 82],
+    ['Erick Pulgar', 79], ['Jorginho', 84], ['Nicolas de la Cruz', 81], ['Saul', 84],
+    ['Lucas Paqueta', 86], ['Jorge Carrascal', 82], ['Giorgian de Arrascaeta', 83], ['Samuel Lino', 84],
+    ['Gonzalo Plata', 82], ['Luiz Araujo', 80], ['Anthony Valencia', 80], ['Pedro', 85],
+  ],
+  'River Plate': [
+    ['Santiago Beltran', 80], ['Lucas Martinez Quarta', 80], ['Tobias Ramirez', 78], ['Nicolas Otamendi', 83],
+    ['Francisco Ortega', 81], ['Marcos Acuna', 82], ['Gonzalo Montiel', 81], ['Anibal Moreno', 80],
+    ['Tobias Andrada', 79], ['Mauro Arambarri', 82], ['Thiago Almada', 85], ['Tomas Galvan', 77],
+    ['Angel Correa', 79], ['Lucas Beltran', 79], ['Sebastian Driussi', 80], ['Rafael Santos Borre', 77],
+  ],
+
+  // İkonik Takımlar (18 Efsane)
+  'Real Madrid 2016-17': [
+    ['Keylor Navas', 88], ['Sergio Ramos', 91], ['Raphael Varane', 87], ['Danilo', 82],
+    ['Nacho Fernandez', 83], ['Pepe', 88], ['Marcelo', 89], ['Fabio Coentrao', 81],
+    ['Daneil Carvajal', 86], ['Casemiro', 89], ['Toni Kroos', 90], ['Luka Modric', 91],
+    ['Mateo Kovacic', 82], ['James Rodriguez', 87], ['Isco', 85], ['Marco Asensio', 84],
+    ['Gareth Bale', 90], ['Karim Benzema', 89], ['Cristiano Ronaldo', 94], ['Alvaro Morata', 84],
+  ],
+  'Real Madrid 2001-02': [
+    ['Iker Casillas', 89], ['Fernando Hierro', 89], ['Ivan Helguera', 87], ['Roberto Carlos', 91],
+    ['Michel Salgado', 87], ['Claude Makelele', 88], ['Guti', 88], ['Nijtap Geremi', 84],
+    ['Zinedine Zidane', 93], ['Steve McManaman', 86], ['Elvir Baljic', 83], ['Luis Figo', 92],
+    ['Raul', 90], ['Fernando Morientes', 89],
+  ],
+  'Barcelona 2014-15': [
+    ['Claudio Bravo', 83], ['Marc Andre Ter Stegen', 85], ['Gerard Pique', 89], ['Javier Mascherano', 83],
+    ['Marc Bartra', 81], ['Thomas Vermaelen', 80], ['Jordi Alba', 86], ['Adriano', 79],
+    ['Dani Alves', 89], ['Sergio Busquets', 89], ['Xavi', 83], ['Andres Iniesta', 88],
+    ['Ivan Rakitic', 87], ['Sergi Roberto', 79], ['Rafinha', 80], ['Pedro', 84],
+    ['Lionel Messi', 95], ['Luis Suarez', 92], ['Neymar', 93],
+  ],
+  'Barcelona 2005-06': [
+    ['Victor Valdes', 89], ['Carles Puyol', 90], ['Rafa Marquez', 85], ['Oleguer', 81],
+    ['Giovanni Van Bronckhorst', 82], ['Sylvinho', 83], ['Juliano Belletti', 85], ['Thiago Motta', 87],
+    ['Edmilson', 86], ['Xavi', 88], ['Mark van Bommel', 84], ['Ronaldinho', 93],
+    ['Deco', 90], ['Lionel Messi', 83], ["Samuel Eto'o", 92], ['Ludovic Giuly', 84],
+    ['Henrik Larsson', 84],
+  ],
+  'Atletico Madrid 2015-16': [
+    ['Jan Oblak', 90], ['Diego Godin', 88], ['Jose Gimenez', 86], ['Filipe Luis', 84],
+    ['Guilherme Siqueira', 81], ['Juanfran', 82], ['Koke', 86], ['Saul', 85],
+    ['Oliver Torres', 80], ['Gabi', 83], ['Raul Garcia', 82], ['Yannick Carrasco', 87],
+    ['Antoine Griezmann', 91], ['Jackson Martinez', 84], ['Fernando Torres', 85],
+  ],
+  'Valencia 2000-01': [
+    ['Santiago Canizares', 90], ['Roberto Ayala', 88], ['Joachim Bjorklund', 82], ['Miroslav Djukic', 81],
+    ['Mauricio Pellegrini', 81], ['Fabio Aurelio', 80], ['Didier Deschamps', 85], ['Ruben Baraja', 84],
+    ['Gaizka Mendieta', 88], ['Kily Gonzalez', 83], ['Zlatko Zahovic', 85], ['Pablo Aimar', 87],
+    ['Vicente', 82], ['John Carew', 85], ['Miguel Angel Angulo', 84],
+  ],
+  'Arsenal 2003-04': [
+    ['Jens Lehmann', 88], ['Pascal Cygan', 82], ['Martin Keown', 81], ['Sol Campbell', 89],
+    ['Kolo Toure', 85], ['Ashley Cole', 87], ['Lauren', 86], ['Patrick Vieira', 90],
+    ['Gilberto Silva', 84], ['Ray Parlour', 83], ['Edu Gaspar', 83], ['Freddie Ljungberg', 86],
+    ['Dennis Bergkamp', 90], ['Robert Pires', 88], ['Thierry Henry', 93],
+  ],
+  'Chelsea 2004-05': [
+    ['Petr Cech', 90], ['Ricardo Carvalho', 87], ['John Terry', 90], ['William Gallas', 83],
+    ['Wayne Bridge', 82], ['Paulo Ferreira', 82], ['Glen Johnson', 81], ['Claude Makelele', 88],
+    ['Frank Lampard', 91], ['Tiago Mendes', 83], ['Damien Duff', 85], ['Joe Cole', 86],
+    ['Adrien Mutu', 82], ['Arjen Robben', 83], ['Didier Drogba', 89], ['Mateja Kezman', 80],
+    ['Eidur Gudjohnsen', 84],
+  ],
+  'Liverpool 2018-19': [
+    ['Alisson', 89], ['Virgil Van Dijk', 92], ['Joel Matip', 82], ['Joe Gomez', 81],
+    ['Dejan Lovren', 77], ['Andrew Robertson', 87], ['Trent Alexander Arnold', 88], ['Nathaniel Clyne', 78],
+    ['Fabinho', 86], ['Naby Keita', 84], ['Georginio Wijnaldum', 87], ['Jordan Henderson', 86],
+    ['Alex Oxlade Chamberlain', 80], ['James Milner', 83], ['Adam Lallana', 81], ['Xherdan Shaqiri', 83],
+    ['Roberto Firmino', 87], ['Mohamed Salah', 91], ['Sadio Mane', 89], ['Divock Origi', 83],
+    ['Daniel Sturridge', 79],
+  ],
+  'Manchester United 2007-08': [
+    ['Edwin van der Sar', 88], ['Rio Ferdinand', 89], ['Nemanja Vidic', 90], ['Wes Brown', 83],
+    ["John O'Shea", 83], ['Patrice Evra', 87], ['Mikael Silvestre', 83], ['Gary Neville', 84],
+    ['Owen Hargreaves', 84], ['Michael Carrick', 85], ['Anderson', 82], ['Paul Scholes', 89],
+    ['Darren Fletcher', 83], ['Ryan Giggs', 85], ['Ji Sung Park', 84], ['Nani', 86],
+    ['Cristiano Ronaldo', 92], ['Wayne Rooney', 91], ['Carlos Tevez', 89], ['Louis Saha', 82],
+  ],
+  'Inter 2009-10': [
+    ['Julio Cesar', 88], ['Cristian Chivu', 83], ['Lucio', 87], ['Walter Samuel', 86],
+    ['Ivan Cordoba', 83], ['Marco Materazzi', 81], ['Javier Zanetti', 86], ['Maicon', 85],
+    ['Esteban Cambiasso', 86], ['Thiago Motta', 84], ['Patrick Vieira', 82], ['Dejan Stankovic', 87],
+    ['Wesley Sneijder', 90], ["Samuel Eto'o", 91], ['Diego Milito', 88],
+  ],
+  'Juventus 2016-17': [
+    ['Gianluigi Buffon', 90], ['Leandro Bonucci', 88], ['Giorgio Chiellini', 85], ['Mehdi Benatia', 82],
+    ['Andrea Barzagli', 80], ['Alex Sandro', 83], ['Patrice Evra', 81], ['Stephan Lichtsteiner', 82],
+    ['Dani Alves', 83], ['Miralem Pjanic', 86], ['Mario Lemina', 80], ['Claudio Marchisio', 81],
+    ['Juan Cuadrado', 84], ['Kwadwo Asamoah', 82], ['Paulo Dybala', 90], ['Mario Mandzukic', 85],
+    ['Gonzalo Higuain', 88],
+  ],
+  'Milan 2004-05': [
+    ['Dida', 88], ['Alessandro Nesta', 89], ['Jaap Stam', 86], ['Paolo Maldini', 89],
+    ['Cafu', 87], ['Andrea Pirlo', 91], ['Gennaro Gattuso', 87], ['Clarence Seedorf', 87],
+    ['Kaka', 91], ['Rui Costa', 82], ['Andriy Shevchenko', 90], ['Hernan Crespo', 86],
+    ['Flippo Inzaghi', 88],
+  ],
+  'Roma 2000-01': [
+    ['Francesco Antonioli', 83], ['Antonio Zago', 84], ['Aldair', 85], ['Jonathan Zebina', 81],
+    ['Vincent Candela', 84], ['Cafu', 89], ['Emerson', 81], ['Cristiano Zanetti', 84],
+    ['Eusebio di Francesco', 82], ['Damiano Tommasi', 84], ['Francesco Totti', 88], ['Vincenzo Montella', 83],
+    ['Gabriel Batistuta', 91], ['Marco Delvecchio', 85],
+  ],
+  'Lazio 1999-00': [
+    ['Luca Marchegiani', 84], ['Sinisa Mihajlovic', 87], ['Alessandro Nesta', 88], ['Fernando Couto', 82],
+    ['Giueseppe Favalli', 84], ['Paolo Negro', 83], ['Giueseppe Pancaro', 84], ['Matias Almeyda', 85],
+    ['Diego Simeone', 86], ['Juan Sebastian Veron', 89], ['Pavel Nedved', 87], ['Sergio Conceicao', 85],
+    ['Alen Boksic', 85], ['Simone Inzaghi', 86], ['Marcelo Salas', 87],
+  ],
+  'Bayern Munchen 2012-13': [
+    ['Manuel Neuer', 92], ['David Alaba', 86], ['Jerome Boateng', 87], ['Dante', 85],
+    ['Holger Badstuber', 82], ['Daniel Van Buyten', 82], ['Philipp Lahm', 89], ['Luiz Gustavo', 84],
+    ['Javi Martinez', 85], ['Bastian Schweinsteiger', 87], ['Toni Kroos', 87], ['Xherdan Shaqiri', 80],
+    ['Franck Ribery', 91], ['Arjen Robben', 90], ['Mario Gomez', 88], ['Thomas Muller', 89],
+    ['Mario Mandzukic', 86],
+  ],
+  'Borussia Dortmund 2012-13': [
+    ['Roman Weidenfeller', 86], ['Mats Hummels', 87], ['Neven Subotic', 85], ['Marcel Schmelzer', 83],
+    ['Lukasz Piszczek', 84], ['Sven Bender', 82], ['Nuri Sahin', 83], ['Sebastian Kehl', 83],
+    ['Ilkay Gundogan', 87], ['Mario Gotze', 87], ['Marco Reus', 88], ['Jakub Blaszczykowski', 84],
+    ['Robert Lewandowski', 90],
+  ],
+  'RB Salzburg 2019-20': [
+    ['Cican Stankovic', 76], ['Max Wober', 79], ['Jerome Onguene', 77], ['Andre Ramalho', 81],
+    ['Andreas Ulmer', 82], ['Rasmus Kristensen', 82], ['Enock Mwepu', 84], ['Zlatko Junuzovic', 85],
+    ['Dominik Szoboszlai', 87], ['Takumi Minamino', 82], ['Karim Adeyemi', 78], ['Noah Okafor', 78],
+    ['Erling Haaland', 87], ['Hee Chan Hwang', 82], ['Sekou Koita', 79], ['Paton Daka', 81],
+  ],
+};
+
+export const CLUB_TO_LEAGUE: Record<string, string> = {
+  // Premier Lig (20)
+  'Manchester City': 'Premier Lig',
+  'Arsenal': 'Premier Lig',
+  'Chelsea': 'Premier Lig',
+  'Liverpool': 'Premier Lig',
+  'Manchester United': 'Premier Lig',
+  'Tottenham': 'Premier Lig',
+  'Aston Villa': 'Premier Lig',
+  'Bournemouth': 'Premier Lig',
+  'Brentford': 'Premier Lig',
+  'Brighton': 'Premier Lig',
+  'Coventry City': 'Premier Lig',
+  'Crystal Palace': 'Premier Lig',
+  'Everton': 'Premier Lig',
+  'Fulham': 'Premier Lig',
+  'Hull City': 'Premier Lig',
+  'Ipswich Town': 'Premier Lig',
+  'Leeds United': 'Premier Lig',
+  'Newcastle United': 'Premier Lig',
+  'Nottingham Forest': 'Premier Lig',
+  'Sunderland': 'Premier Lig',
+  // La Liga (4)
+  'Real Madrid': 'La Liga',
+  'Barcelona': 'La Liga',
+  'Atletico Madrid': 'La Liga',
+  'Villarreal': 'La Liga',
+  // Serie A (9)
+  'Como': 'Serie A',
+  'Inter': 'Serie A',
+  'Juventus': 'Serie A',
+  'Milan': 'Serie A',
+  'Roma': 'Serie A',
+  'Atalanta': 'Serie A',
+  'Napoli': 'Serie A',
+  'Fiorentina': 'Serie A',
+  'Lazio': 'Serie A',
+  // Bundesliga (5)
+  'Bayern Munchen': 'Bundesliga',
+  'Borussia Dortmund': 'Bundesliga',
+  'Bayer Leverkusen': 'Bundesliga',
+  'RB Leipzig': 'Bundesliga',
+  'Freiburg': 'Bundesliga',
+  // Ligue 1 (2)
+  'PSG': 'Ligue 1',
+  'Monaco': 'Ligue 1',
+  // Liga Portugal (3)
+  'Porto': 'Liga Portugal',
+  'Benfica': 'Liga Portugal',
+  'Sporting': 'Liga Portugal',
+  // Eredivisie (3)
+  'Ajax': 'Eredivisie',
+  'PSV': 'Eredivisie',
+  'Feyenoord': 'Eredivisie',
+  // Trendyol Süper Lig (4)
+  'Galatasaray': 'Trendyol Süper Lig',
+  'Fenerbahce': 'Trendyol Süper Lig',
+  'Besiktas': 'Trendyol Süper Lig',
+  'Trabzonspor': 'Trendyol Süper Lig',
+  // Diğer Takımlar (9)
+  'West Ham United': 'Diğer Takımlar',
+  'Club Brugge': 'Diğer Takımlar',
+  'RB Salzburg': 'Diğer Takımlar',
+  'Bodo Glimt': 'Diğer Takımlar',
+  'Olympiacos': 'Diğer Takımlar',
+  'Celtic': 'Diğer Takımlar',
+  'Rangers': 'Diğer Takımlar',
+  'Flamengo': 'Diğer Takımlar',
+  'River Plate': 'Diğer Takımlar',
+  // İkonik Takımlar (18)
+  'Real Madrid 2016-17': 'İkonik Takımlar',
+  'Real Madrid 2001-02': 'İkonik Takımlar',
+  'Barcelona 2014-15': 'İkonik Takımlar',
+  'Barcelona 2005-06': 'İkonik Takımlar',
+  'Atletico Madrid 2015-16': 'İkonik Takımlar',
+  'Valencia 2000-01': 'İkonik Takımlar',
+  'Arsenal 2003-04': 'İkonik Takımlar',
+  'Chelsea 2004-05': 'İkonik Takımlar',
+  'Liverpool 2018-19': 'İkonik Takımlar',
+  'Manchester United 2007-08': 'İkonik Takımlar',
+  'Inter 2009-10': 'İkonik Takımlar',
+  'Juventus 2016-17': 'İkonik Takımlar',
+  'Milan 2004-05': 'İkonik Takımlar',
+  'Roma 2000-01': 'İkonik Takımlar',
+  'Lazio 1999-00': 'İkonik Takımlar',
+  'Bayern Munchen 2012-13': 'İkonik Takımlar',
+  'Borussia Dortmund 2012-13': 'İkonik Takımlar',
+  'RB Salzburg 2019-20': 'İkonik Takımlar',
+};
+
+export const PS: Record<string, string> = {
+  'Manchester City': 'GGDDDDDDDDMMMMMMFFFFF',
+  'Arsenal': 'GGGDDDDDDDDMMMMMMFFFFFF',
+  'Chelsea': 'GGDDDDDDDDDDMMMMMMFFFFFFF',
+  'Liverpool': 'GGDDDDDDDDDMMMMMMFFFFFF',
+  'Manchester United': 'GDDDDDDDDMMMMMMMFDFFFFF',
+  'Tottenham': 'GGDDDDDDDDMMMMMMMMMFFFFFFFF',
+  'Aston Villa': 'FMGMMDDFMMDFMDMDMDDGD',
+  'Bournemouth': 'FDMMMFGDDFMDGDDMDMD',
+  'Brentford': 'DFDMMDMDDMMDGDFFMFGDFMD',
+  'Brighton': 'MGDFDDFMMDDFFMFFGDDGDM',
+  'Coventry City': 'DFGDMMMDMMDMGFFFDFMDF',
+  'Crystal Palace': 'GDDMFFGMMDFMFFDDFFFDFMDM',
+  'Everton': 'MFMDMMFMFDDDDGMDG',
+  'Fulham': 'DDDMFMDMDFMMGGFMMDFDMD',
+  'Hull City': 'DFGFDMDFDMDMFMDMDMMDDG',
+  'Ipswich Town': 'FFDDDMFMDDDMFMMFMMDMFGM',
+  'Leeds United': 'MMDDDFDMDFFDMDFFDMMGFG',
+  'Newcastle United': 'MFDDDFGMDGDFFGMDDMF',
+  'Nottingham Forest': 'DDFDMMFFFGMDDFDDMDMGDFM',
+  'Sunderland': 'DDMDFDMDFMDDDFDFGMM',
+  'West Ham United': 'GDDDDDDMMMMFFFFFF',
+  'Real Madrid': 'GGDDDDDDDDDMMMMMMFFFMFFF',
+  'Barcelona': 'GDDDDDDDDMMMMMMMFFFFF',
+  'Atletico Madrid': 'GDDDDDMMMMMMFFFFF',
+  'Villarreal': 'GDDDDDDDMMMMMFFF',
+  'Como': 'GDDDDDMMMMMMFFFFF',
+  'Inter': 'GGDDDDDDDDMMMMMMMMMFFFF',
+  'Juventus': 'GGDDDDDDDDMMMMMMFFFFFFFFF',
+  'Milan': 'GDDDDDDDMMMMMFMFMFFFF',
+  'Roma': 'GDDDDDDDDMMMMMMFFFF',
+  'Atalanta': 'GDDDDDDMMMMMMMFFFFF',
+  'Napoli': 'GGDDDDDDDMMMMMFFFFFF',
+  'Fiorentina': 'GDDDDDDMMMMMFFF',
+  'Lazio': 'GDDDDDDDDMMMMMFFFFFF',
+  'Bayern Munchen': 'GGDDDDDDDMDMMMMMMFFFF',
+  'Borussia Dortmund': 'GDDDDDDMMMMMMMFFF',
+  'Bayer Leverkusen': 'GDDDDDMMMMMFMFFFF',
+  'RB Leipzig': 'GDDDDDDMMMMMMFFFF',
+  'Freiburg': 'GGDDDDDDDDMMMMMFFF',
+  'PSG': 'GGDDDDDDDDMMMMMMFFFFF',
+  'Monaco': 'GGDDDDDMMMFMFFF',
+  'Porto': 'GDDDDDDDMMMMMMFFFFFFF',
+  'Benfica': 'GDDDDDMMMMMMFFFFFFF',
+  'Sporting': 'GDDDDDDDDMMMMMFFFFFF',
+  'Ajax': 'GDDDDDDDDMMMMMMMFFFFFF',
+  'PSV': 'GDDDDDDMMMMMFFFFF',
+  'Feyenoord': 'GDDDDDMMMMMFFF',
+  'Galatasaray': 'GDDDDDDMMMMMMFFFFFFF',
+  'Fenerbahce': 'GDDDDDDDDMMMMMFFFFFF',
+  'Besiktas': 'GDDDDDDDDMMMMMFFFFFFF',
+  'Trabzonspor': 'GDDDDDDDDMMMMMMFFFFF',
+  'Club Brugge': 'GDDDDDMMMMMFFFF',
+  'RB Salzburg': 'GDDDDMMMFFFF',
+  'Bodo Glimt': 'GDDDDDDDMMMMMMFFFFF',
+  'Olympiacos': 'GDDDDDMMMMMFFFFF',
+  'Celtic': 'GDDDDDDDMMMMFFFFF',
+  'Rangers': 'GDDDDMMMMFFFFF',
+  'Flamengo': 'GGDDDDDDMMMMMMMFFFFF',
+  'River Plate': 'GDDDDDDMMMMMFFFF',
+  'Real Madrid 2016-17': 'GDDDDDDDDMMMMMMMFFFF',
+  'Real Madrid 2001-02': 'GDDDDMMMMMFFFF',
+  'Barcelona 2014-15': 'GGDDDDDDDMMMMMMFFFF',
+  'Barcelona 2005-06': 'GDDDDDDMMMMMFFFFF',
+  'Atletico Madrid 2015-16': 'GDDDDDMMMMMFFFF',
+  'Valencia 2000-01': 'GDDDDDMMMMMMFFF',
+  'Arsenal 2003-04': 'GDDDDDDMMMMMFFF',
+  'Chelsea 2004-05': 'GDDDDDDMMMMMFFFFF',
+  'Liverpool 2018-19': 'GDDDDDDDMMMMMMMFFFFFF',
+  'Manchester United 2007-08': 'GDDDDDDDMMMMMMMFFFFF',
+  'Inter 2009-10': 'GDDDDDDDMMMMMFF',
+  'Juventus 2016-17': 'GDDDDDDDDMMMMMFFF',
+  'Milan 2004-05': 'GDDDDMMMMMFFF',
+  'Roma 2000-01': 'GDDDDDMMMMFFFF',
+  'Lazio 1999-00': 'GDDDDDDMMMMMFFF',
+  'Bayern Munchen 2012-13': 'GDDDDDDMMMMMFFFFF',
+  'Borussia Dortmund 2012-13': 'GDDDDMMMMMMFF',
+  'RB Salzburg 2019-20': 'GDDDDDMMMMFFFFFF',
+};
+
+export const ICONIC_CLUBS: string[] = [
+  'Real Madrid 2016-17',
+  'Real Madrid 2001-02',
+  'Barcelona 2014-15',
+  'Barcelona 2005-06',
+  'Atletico Madrid 2015-16',
+  'Valencia 2000-01',
+  'Arsenal 2003-04',
+  'Chelsea 2004-05',
+  'Liverpool 2018-19',
+  'Manchester United 2007-08',
+  'Inter 2009-10',
+  'Juventus 2016-17',
+  'Milan 2004-05',
+  'Roma 2000-01',
+  'Lazio 1999-00',
+  'Bayern Munchen 2012-13',
+  'Borussia Dortmund 2012-13',
+  'RB Salzburg 2019-20',
+];
+
+export const POSITIONS: Position[] = ['GK', 'DEF', 'MID', 'FWD'];
+export const POS_LABEL: Record<Position, string> = {
+  GK: 'Kaleci',
+  DEF: 'Defans',
+  MID: 'Orta Saha',
+  FWD: 'Forvet',
+};
+export const POS_SHORT: Record<Position, string> = {
+  GK: 'KL',
+  DEF: 'DEF',
+  MID: 'OS',
+  FWD: 'FV',
+};
+
+export const STARTERS_COUNT = 11;
+export const SUBS_COUNT = 3;
+export const ROUNDS = STARTERS_COUNT + SUBS_COUNT; // 14
+export const FORMATION_QUOTA: Record<Position, number> = {
+  GK: 1,
+  DEF: 4,
+  MID: 3,
+  FWD: 3,
+};
+
+export const FORMATIONS: Record<FormationName, FormationDef> = {
+  '4-3-3': {
+    quota: { GK: 1, DEF: 4, MID: 3, FWD: 3 },
+    rows: [
+      { label: 'FV', pos: 'FWD', count: 3 },
+      { label: 'OS', pos: 'MID', count: 3 },
+      { label: 'DEF', pos: 'DEF', count: 4 },
+      { label: 'KL', pos: 'GK', count: 1 },
+    ],
+  },
+  '4-2-3-1': {
+    quota: { GK: 1, DEF: 4, MID: 5, FWD: 1 },
+    rows: [
+      { label: 'ST', pos: 'FWD', count: 1 },
+      { label: 'OOS / KANAT', pos: 'MID', count: 3 },
+      { label: 'MDO', pos: 'MID', count: 2 },
+      { label: 'DEF', pos: 'DEF', count: 4 },
+      { label: 'KL', pos: 'GK', count: 1 },
+    ],
+  },
+  '4-4-2': {
+    quota: { GK: 1, DEF: 4, MID: 4, FWD: 2 },
+    rows: [
+      { label: 'FV', pos: 'FWD', count: 2 },
+      { label: 'OS', pos: 'MID', count: 4 },
+      { label: 'DEF', pos: 'DEF', count: 4 },
+      { label: 'KL', pos: 'GK', count: 1 },
+    ],
+  },
+  '3-5-2': {
+    quota: { GK: 1, DEF: 3, MID: 5, FWD: 2 },
+    rows: [
+      { label: 'FV', pos: 'FWD', count: 2 },
+      { label: 'OS', pos: 'MID', count: 5 },
+      { label: 'DEF', pos: 'DEF', count: 3 },
+      { label: 'KL', pos: 'GK', count: 1 },
+    ],
+  },
+};
+
+export function calcBasePriceWithVariance(name: string, rating: number, idx: number): number {
+  const r = rating || 75;
+  let base: number;
+  if (r <= 72) base = 6;
+  else if (r <= 75) base = 8 + (r - 72);
+  else if (r <= 79) base = 11 + Math.round((r - 75) * 1.5);
+  else if (r <= 83) base = 17 + Math.round((r - 79) * 2.2);
+  else if (r <= 87) base = 26 + Math.round((r - 83) * 3.5);
+  else base = 40 + Math.round((r - 87) * 4.8);
+
+  let hash = idx * 31;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash << 5) - hash + name.charCodeAt(i);
+    hash |= 0;
+  }
+  const swing = (Math.abs(hash) % 13) - 6;
+  return Math.max(4, base + swing);
+}
+
+const POS_CODE_MAP: Record<string, Position> = {
+  G: 'GK',
+  D: 'DEF',
+  M: 'MID',
+  F: 'FWD',
+};
+
+export const PLAYERS_POOL: Player[] = Object.entries(DATA).flatMap(([club, list]) => {
+  return list.map(([name, rating], idx) => ({
+    id: 0,
+    n: name,
+    c: club,
+    lg: CLUB_TO_LEAGUE[club] || 'Diğer Takımlar',
+    r: rating,
+    pos: POS_CODE_MAP[(PS[club] || '')[idx] || 'M'] || 'MID',
+    price: 0,
+  }));
+}).map((p, globalIdx) => ({
+  ...p,
+  id: globalIdx,
+  price: calcBasePriceWithVariance(p.n, p.r, globalIdx),
+}));
+
+export const PLAYERS_BY_ID: Record<number, Player> = Object.fromEntries(
+  PLAYERS_POOL.map(p => [p.id, p])
+);
+
+export const ALL_CLUBS: string[] = [...new Set(PLAYERS_POOL.map(p => p.c))];
+export const ALL_LEAGUES: string[] = [...new Set(PLAYERS_POOL.map(p => p.lg))];
+export const MODERN_LEAGUES: string[] = ALL_LEAGUES.filter(l => l !== 'İkonik Takımlar');
+
+export const MODES: GameModeDef[] = [
+  {
+    id: 'career',
+    name: 'Lig Kariyer Modu',
+    tag: '★ YENİ MOD · 1 veya 2 Kişilik Sezon',
+    d: "360 M€ bütçeyle kadronu kur; Premier Lig'de 20 takımlı 38 haftalık tam sezon fikstüründe şampiyonluk mücadelesi ver!",
+    clubs: 'optional',
+    cpu: 'best',
+    budget: 360,
+    career: 1,
+    special: 1,
+  },
+  {
+    id: 'classic',
+    name: 'Klasik Draft',
+    tag: 'Standart Seçim',
+    d: '11 asil ve 3 yedek oyuncuyu sırayla seçerek kadronu oluştur.',
+    clubs: 'optional',
+    cpu: 'best',
+  },
+  {
+    id: 'wheel',
+    name: 'Çark Draftı',
+    tag: 'Takım Çarkı',
+    d: 'Seçilen takımlar çarka yerleşir; hem sen hem de yapay zeka çarkı döndürerek çıkan kulüpten oyuncu alır.',
+    clubs: 'optional',
+    cpu: 'wheel',
+    wheel: 1,
+  },
+  {
+    id: 'iconic',
+    name: 'İkonik Draft',
+    tag: '18 Efsane Kadro',
+    d: 'Real Madrid 16-17, Barça 14-15, Milan 04-05, Arsenal 03-04 gibi unutulmaz efsane kadrolarla draft yap.',
+    clubs: 'optional',
+    cpu: 'best',
+    iconicDefault: 1,
+  },
+  {
+    id: 'club',
+    name: 'Kulüp Draftı',
+    tag: 'Özel Kulüp Havuzu',
+    d: 'Yalnızca belirlediğin kulüplerin oyuncularıyla draft yap.',
+    clubs: 'required',
+    cpu: 'best',
+  },
+  {
+    id: 'budget',
+    name: 'Bütçe Draftı',
+    tag: '360 M€ Bütçe',
+    d: 'Dinamik piyasa değerleriyle 360 M€ bütçeyi aşmadan 14 kişilik kadronu kur.',
+    clubs: 'optional',
+    cpu: 'best',
+    budget: 360,
+  },
+];
+
+export const CUSTOM_SHAPES: { id: IdentityShape; name: string }[] = [
+  { id: 'shield', name: 'Kalkan Arma' },
+  { id: 'circle', name: 'Klasik Daire' },
+  { id: 'stripes', name: 'Çubuklu Arma' },
+  { id: 'diamond', name: 'Elmas Arma' },
+  { id: 'star', name: 'Yıldızlı Arma' },
+];
+
+export const CAREER_LEAGUES_PREVIEW = [
+  { id: 'Premier Lig', name: 'Premier Lig', country: 'İngiltere', teams: 20, active: true, note: '20 Takım · 38 Hafta Tam Sezon' },
+  { id: 'La Liga', name: 'La Liga', country: 'İspanya', teams: 4, active: false, note: 'Sonra Gelecek (Yeterli Takım Yok)' },
+  { id: 'Serie A', name: 'Serie A', country: 'İtalya', teams: 9, active: false, note: 'Sonra Gelecek (Yeterli Takım Yok)' },
+  { id: 'Bundesliga', name: 'Bundesliga', country: 'Almanya', teams: 5, active: false, note: 'Sonra Gelecek (Yeterli Takım Yok)' },
+  { id: 'Ligue 1', name: 'Ligue 1', country: 'Fransa', teams: 2, active: false, note: 'Sonra Gelecek (Yeterli Takım Yok)' },
+  { id: 'Trendyol Süper Lig', name: 'Trendyol Süper Lig', country: 'Türkiye', teams: 4, active: false, note: 'Sonra Gelecek (Yeterli Takım Yok)' },
+  { id: 'Liga Portugal', name: 'Liga Portugal', country: 'Portekiz', teams: 3, active: false, note: 'Sonra Gelecek (Yeterli Takım Yok)' },
+  { id: 'Eredivisie', name: 'Eredivisie', country: 'Hollanda', teams: 3, active: false, note: 'Sonra Gelecek (Yeterli Takım Yok)' },
+];
