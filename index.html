@@ -16,6 +16,28 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      (function () {
+        // When served directly as static files on GitHub Pages (from repo root without Vite dev server),
+        // /@vite/client is absent and /src/main.tsx cannot run directly in the browser.
+        // Automatically load the pre-compiled production bundle from ./dist/assets/.
+        window.addEventListener('DOMContentLoaded', function () {
+          var isViteDev = !!document.querySelector('script[src*="@vite/client"]');
+          var isBuiltDist = !!document.querySelector('script[src*="assets/app.js"]');
+          if (!isViteDev && !isBuiltDist) {
+            var css = document.createElement('link');
+            css.rel = 'stylesheet';
+            css.href = './dist/assets/index.css';
+            document.head.appendChild(css);
+
+            var js = document.createElement('script');
+            js.type = 'module';
+            js.src = './dist/assets/app.js';
+            document.body.appendChild(js);
+          }
+        });
+      })();
+    </script>
   </body>
 </html>
 

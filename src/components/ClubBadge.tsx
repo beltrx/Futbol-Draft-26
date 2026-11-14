@@ -21,6 +21,13 @@ export const ClubLogo: React.FC<ClubLogoProps> = ({ club, size = 20, className =
         alt={club}
         width={size}
         height={size}
+        onError={(e) => {
+          const img = e.currentTarget;
+          if (customUri.startsWith('/') && !img.dataset.fallbackTried) {
+            img.dataset.fallbackTried = '1';
+            img.src = `./public${customUri}`;
+          }
+        }}
         className={`inline-block shrink-0 object-contain drop-shadow-sm ${className}`}
         style={{ width: size, height: size }}
       />
