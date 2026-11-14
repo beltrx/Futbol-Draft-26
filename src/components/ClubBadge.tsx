@@ -11,9 +11,13 @@ interface ClubLogoProps {
 export const ClubLogo: React.FC<ClubLogoProps> = ({ club, size = 20, className = '' }) => {
   const customUri = CUSTOM_CLUB_LOGOS[club];
   if (customUri) {
+    const resolvedSrc =
+      customUri.startsWith('/') && !customUri.startsWith('//')
+        ? `.${customUri}`
+        : customUri;
     return (
       <img
-        src={customUri}
+        src={resolvedSrc}
         alt={club}
         width={size}
         height={size}
