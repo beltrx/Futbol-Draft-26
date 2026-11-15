@@ -133,6 +133,15 @@ export class OnlineRoomController {
     this.emitState();
   }
 
+  clearPreMatchReady(): void {
+    const p = this.snapshot.readyPhase || '';
+    if (p.startsWith('match_kickoff_') || p.startsWith('match_instant_')) {
+      this.snapshot.readyPhase = '';
+      this.snapshot.readyMap = { 0: false, 1: false };
+      this.emitState();
+    }
+  }
+
   pushChat(sender: string, text: string): void {
     const next = [...this.snapshot.chatLog, { sender, text }];
     if (next.length > 15) next.shift();
@@ -341,7 +350,7 @@ export class OnlineRoomController {
 
     if (this.conn && this.conn.open) {
       try {
-        this.conn.send(envelope);
+        this.conn.send(JSON.parse(str));
       } catch {
         // ignore peer send failure
       }

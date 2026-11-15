@@ -10,8 +10,10 @@ import {
   initCareerLeague,
   modifyRivalPlayerRating,
   PREMIER_STAR_NEWS_TEMPLATES,
+  resolveTeamCareerEventChoice,
   selectPremierLeagueAiClubs,
   suspendPlayerForRedCard,
+  triggerWeeklyCareerEvent,
   WORLD_FOOTBALL_NEWS_TEMPLATES,
 } from './careerLogic';
 import { CLUB_TO_LEAGUE, MODES } from '../data/database';
@@ -333,3 +335,67 @@ test('buildPitchRowsForTeam orders rows from FWD (top) down to GK (bottom) acros
     );
   }
 });
+
+test('2-player Career mode maintains independent teamCareer events, funds, morale, and history per human player', () => {
+  const { state } = buildDraftState({
+    mode: 'career',
+    leagues: new Set(['Premier Lig', 'La Liga']),
+    clubs: new Set(),
+    opp: 1,
+    humanCount: 2,
+    format: 'snake',
+    strictPos: true,
+  });
+  assert.ok(state);
+  while (state.k < state.order.length) {
+    const ti = state.order[state.k];
+    const p = chooseCpuPlayer(state, state.teams[ti], true)!;
+    state.teams[ti].picks.push(p);
+    state.teams[ti].spent += cost(p);
+    state.taken.add(p.id);
+    state.k++;
+  }
+
+  const { teams, league } = initCareerLeague(state.teams, state.m.budget, 'Premier Lig');
+  assert.ok(league.teamCareer?.[0]);
+  assert.ok(league.teamCareer?.[1]);
+
+  // Force event generation on week 2
+  league.week = 2;
+  triggerWeeklyCareerEvent(league, teams, true);
+
+  // Simulate PeerJS JSON roundtrip on league
+  const roundtrippedLeague = JSON.parse(
+    JSON.stringify({
+      ...league,
+      usedEventIds: [...league.usedEventIds],
+      usedNewsIds: [...league.usedNewsIds],
+    })
+  );
+  roundtrippedLeague.usedEventIds = new Set(roundtrippedLeague.usedEventIds);
+  roundtrippedLeague.usedNewsIds = new Set(roundtrippedLeague.usedNewsIds);
+
+  assert.ok(roundtrippedLeague.teamCareer[0].activeEvent, 'Team 0 should have an active event');
+  assert.ok(roundtrippedLeague.teamCareer[1].activeEvent, 'Team 1 should have an active event');
+
+  const team1FundsBefore = roundtrippedLeague.teamCareer[1].clubFunds;
+  const team1MoraleBefore = roundtrippedLeague.teamCareer[1].moraleMod;
+  const team1SponsorBefore = roundtrippedLeague.teamCareer[1].sponsorName;
+
+  // Resolve choice 0 for Team 0 (Admin) on roundtrippedLeague (even after JSON serialization stripped functions!)
+  const outcome0 = resolveTeamCareerEventChoice(roundtrippedLeague, teams, 0, 0);
+  assert.ok(outcome0.length > 0, 'Team 0 choice should return a non-empty outcome message');
+  assert.equal(roundtrippedLeague.teamCareer[0].eventHistory.length, 1);
+
+  // Team 1 (Guest) must NOT have its eventHistory, funds, morale, or sponsor altered by Team 0's choice!
+  assert.equal(roundtrippedLeague.teamCareer[1].eventHistory.length, 0);
+  assert.equal(roundtrippedLeague.teamCareer[1].clubFunds, team1FundsBefore);
+  assert.equal(roundtrippedLeague.teamCareer[1].moraleMod, team1MoraleBefore);
+  assert.equal(roundtrippedLeague.teamCareer[1].sponsorName, team1SponsorBefore);
+
+  // Now Team 1 resolves its own event independently
+  const outcome1 = resolveTeamCareerEventChoice(roundtrippedLeague, teams, 1, 0);
+  assert.ok(outcome1.length > 0, 'Team 1 choice should return a non-empty outcome message');
+  assert.equal(roundtrippedLeague.teamCareer[1].eventHistory.length, 1);
+});
+

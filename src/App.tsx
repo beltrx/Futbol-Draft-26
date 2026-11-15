@@ -29,12 +29,15 @@ import type {
   LeagueTab,
   MatchState,
   NetStateSnapshot,
+  TeamCareerState,
   TournamentState,
   WheelState,
 } from './types/game';
 import {
+  ensureTeamCareerState,
   finalizeCareerWeekAfterUserMatch,
   initCareerLeague,
+  resolveTeamCareerEventChoice,
   simulateRestOfLeagueSeason,
 } from './utils/careerLogic';
 import {
@@ -66,6 +69,20 @@ import {
 } from './utils/matchEngine';
 
 function cloneLeague(lg: LeagueState): LeagueState {
+  const clonedTeamCareer: Record<number, TeamCareerState> = {};
+  if (lg.teamCareer) {
+    for (const [k, v] of Object.entries(lg.teamCareer)) {
+      clonedTeamCareer[Number(k)] = {
+        ...v,
+        lastResult: v.lastResult ? { ...v.lastResult } : null,
+        usedEventIds: [...(v.usedEventIds || [])],
+        activeEvent: v.activeEvent
+          ? { ...v.activeEvent, choices: v.activeEvent.choices.map((c) => ({ ...c })) }
+          : null,
+        eventHistory: [...(v.eventHistory || [])],
+      };
+    }
+  }
   return {
     ...lg,
     schedule: lg.schedule.map((w) => w.map((f) => ({ ...f, redCards: f.redCards ? [...f.redCards] : undefined }))),
@@ -77,6 +94,7 @@ function cloneLeague(lg: LeagueState): LeagueState {
     usedNewsIds: new Set(lg.usedNewsIds),
     eventHistory: [...lg.eventHistory],
     newsFeed: [...lg.newsFeed],
+    teamCareer: clonedTeamCareer,
   };
 }
 
@@ -302,6 +320,7 @@ export default function App() {
           a,
           b,
           tourneyMatchId,
+          careerWeek: mState.careerWeek,
           plan: serializeMatchPlan(plan),
           autoStart: false,
         });
@@ -319,6 +338,9 @@ export default function App() {
       net: curNet,
     } = stateRef.current;
     if (!curMatch || !curDraft) return;
+    if (fromNet && curMatch.min >= curMatch.plan.maxMin && curMatch.run === 0) {
+      return;
+    }
     if (matchTimerRef.current != null) {
       window.clearInterval(matchTimerRef.current);
       matchTimerRef.current = null;
@@ -385,7 +407,7 @@ export default function App() {
       });
     }
 
-    onlineNet.resetReady();
+    onlineNet.clearPreMatchReady();
     setDraft(draftClone);
     if (tourneyClone) setTournament(tourneyClone);
     setMatch(mNext);
@@ -541,9 +563,10 @@ export default function App() {
     if (!curDraft) return;
 
     if (curDraft.m.career && curLeague) {
+      const matchWeek = curMatch?.careerWeek ?? curLeague.week;
       const roundMatches =
-        curLeague.week <= curLeague.maxWeeks
-          ? curLeague.schedule[curLeague.week - 1] || []
+        matchWeek >= 1 && matchWeek <= curLeague.maxWeeks
+          ? curLeague.schedule[matchWeek - 1] || []
           : [];
       const nextHumanMatch = roundMatches.find(
         (m) =>
@@ -559,6 +582,16 @@ export default function App() {
       setView('league_hub');
       if (curNet.connected && curNet.role === 'host') {
         onlineNet.send({ type: 'PHASE_ADVANCE', to: 'league_hub' });
+        onlineNet.send({
+          type: 'CAREER_SYNC',
+          forceView: 'league_hub',
+          teams: curDraft.teams,
+          league: {
+            ...curLeague,
+            usedEventIds: [...curLeague.usedEventIds],
+            usedNewsIds: [...curLeague.usedNewsIds],
+          },
+        });
       }
       return;
     }
@@ -713,6 +746,14 @@ export default function App() {
         const ti = Number(msg.teamIdx);
         const rdy = Boolean(msg.ready);
         onlineNet.setPhaseReady(phase, ti, rdy);
+        if (
+          st.net.role === 'host' &&
+          rdy &&
+          phase.startsWith('match_done_') &&
+          st.view === 'league_hub'
+        ) {
+          onlineNet.send({ type: 'PHASE_ADVANCE', to: 'league_hub' });
+        }
       } else if (msg.type === 'PHASE_ADVANCE') {
         const nextView = msg.to as AppView;
         if (nextView) {
@@ -811,10 +852,32 @@ export default function App() {
           };
           setDraft(nextDraft);
           setLeague(hydratedLg);
-          if (msg.type === 'CAREER_INIT') {
+          if (msg.type === 'CAREER_INIT' || msg.forceView === 'league_hub') {
             onlineNet.resetReady();
             setView('league_hub');
           }
+        }
+      } else if (msg.type === 'CAREER_EVENT_SYNC') {
+        const ti = Number(msg.teamIdx);
+        if (st.draft && st.league && Number.isFinite(ti)) {
+          const nextDraft = cloneDraftState(st.draft);
+          if (msg.team && nextDraft.teams[ti]) {
+            nextDraft.teams[ti] = msg.team as typeof nextDraft.teams[number];
+          }
+          const nextLg = cloneLeague(st.league);
+          if (!nextLg.teamCareer) nextLg.teamCareer = {};
+          if (msg.teamCareerState) {
+            const incomingTc = msg.teamCareerState as TeamCareerState;
+            nextLg.teamCareer[ti] = {
+              ...incomingTc,
+              activeEvent: null,
+            };
+          }
+          if (msg.injuries && typeof msg.injuries === 'object') {
+            nextLg.injuries = { ...nextLg.injuries, ...(msg.injuries as Record<number, number>) };
+          }
+          setDraft(nextDraft);
+          setLeague(nextLg);
         }
       } else if (msg.type === 'IDENTITY_SYNC') {
         if (st.draft) {
@@ -864,6 +927,7 @@ export default function App() {
         const tmId = (msg.tourneyMatchId as string) || null;
         if (!isCareer && !st.tournament) setTournament(initTournamentState(cloned.teams));
         const mState = createInitialMatchState(a, b, tmId, plan, cloned.teams, st.league, isCareer);
+        if (msg.careerWeek != null) mState.careerWeek = Number(msg.careerWeek);
         if (msg.autoStart) mState.run = 1;
         onlineNet.resetReady();
         setDraft(cloned);
@@ -1051,9 +1115,12 @@ export default function App() {
           });
         }
 
-        onlineNet.resetReady();
+        onlineNet.clearPreMatchReady();
         setDraft(draftClone);
         if (tourneyClone) setTournament(tourneyClone);
+        if (curNet.connected && curNet.role === 'host') {
+          onlineNet.send({ type: 'MATCH_CTRL', action: 'instant' });
+        }
       }
 
       setMatch(mNext);
@@ -1621,33 +1688,46 @@ export default function App() {
             onSimulateSeason={handleSimulateCareerSeason}
             onEditLineup={() => setView('result')}
             onResetToSetup={handleResetToSetup}
-            onResolveEventChoice={(choice: CareerEventChoice) => {
+            onResolveEventChoice={(choice: CareerEventChoice, choiceIdx: number) => {
+              const activeIdx = net.connected ? net.myTeamIdx : 0;
               const lgClone = cloneLeague(league);
               const draftClone = cloneDraftState(draft);
-              const userTeam = draftClone.teams[net.connected ? net.myTeamIdx : 0];
-              const msg = choice.effect({ lg: lgClone, userTeam });
-              if (lgClone.activeEvent) {
-                lgClone.eventHistory.unshift({
-                  week: lgClone.week,
-                  title: lgClone.activeEvent.title,
-                  outcome: msg,
-                });
-              }
+              const idx = choice.choiceIdx ?? choiceIdx;
+              const msg = resolveTeamCareerEventChoice(
+                lgClone,
+                draftClone.teams,
+                activeIdx,
+                idx
+              );
               setDraft(draftClone);
               setLeague(lgClone);
               return msg;
             }}
             onDismissEvent={() => {
-              setLeague((prev) => {
-                if (!prev) return prev;
-                const next = cloneLeague(prev);
+              const activeIdx = net.connected ? net.myTeamIdx : 0;
+              const curLeague = stateRef.current.league;
+              const curDraft = stateRef.current.draft;
+              if (!curLeague) return;
+              const next = cloneLeague(curLeague);
+              const tc = ensureTeamCareerState(next, activeIdx);
+              tc.activeEvent = null;
+              if (activeIdx === 0) {
                 next.activeEvent = null;
-                if (next.pendingNewsAfterEvent) {
-                  next.activeNews = next.pendingNewsAfterEvent;
-                  next.pendingNewsAfterEvent = null;
-                }
-                return next;
-              });
+              }
+              if (next.pendingNewsAfterEvent) {
+                next.activeNews = next.pendingNewsAfterEvent;
+                next.pendingNewsAfterEvent = null;
+              }
+              setLeague(next);
+              if (net.connected && curDraft) {
+                onlineNet.send({
+                  type: 'CAREER_EVENT_SYNC',
+                  teamIdx: activeIdx,
+                  teamCareerState: tc,
+                  team: curDraft.teams[activeIdx],
+                  injuries: next.injuries,
+                });
+              }
             }}
             onDismissNews={() => {
               setLeague((prev) => (prev ? { ...prev, activeNews: null } : prev));

@@ -196,6 +196,7 @@ export interface MatchState {
   run: number;
   speed: 1 | 2 | 4;
   leagueWeekRecorded: boolean;
+  careerWeek?: number;
 }
 
 export interface TournamentMatch {
@@ -255,9 +256,10 @@ export interface CareerNewsItem {
 }
 
 export interface CareerEventChoice {
+  choiceIdx?: number;
   label: string;
   outcomeText?: string;
-  effect: (ctx: { lg: LeagueState; userTeam: Team }) => string;
+  effect: (ctx: { lg: LeagueState; userTeam: Team; teamIdx?: number }) => string;
 }
 
 export interface CareerEvent {
@@ -265,6 +267,9 @@ export interface CareerEvent {
   tag: string;
   title: string;
   desc: string;
+  teamIdx?: number;
+  targetPlayerId?: number;
+  benchPlayerId?: number;
   choices: CareerEventChoice[];
 }
 
@@ -272,6 +277,16 @@ export interface CareerEventHistoryItem {
   week: number;
   title: string;
   outcome: string;
+}
+
+export interface TeamCareerState {
+  clubFunds: number;
+  sponsorName: string;
+  moraleMod: number;
+  lastResult: { userGoals: number; oppGoals: number; oppName: string } | null;
+  usedEventIds: string[];
+  activeEvent: CareerEvent | null;
+  eventHistory: CareerEventHistoryItem[];
 }
 
 export type LeagueTab = 'standings' | 'fixtures' | 'leaders' | 'news';
@@ -298,6 +313,7 @@ export interface LeagueState {
   activeNews: CareerNewsItem | null;
   pendingNewsAfterEvent?: CareerNewsItem | null;
   eventHistory: CareerEventHistoryItem[];
+  teamCareer?: Record<number, TeamCareerState>;
   newsFeed: CareerNewsItem[];
   tab: LeagueTab;
 }

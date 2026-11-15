@@ -11,6 +11,7 @@ import type {
   SideEvaluation,
   StandingsRow,
   Team,
+  TeamCareerState,
 } from '../types/game';
 import {
   enforceHealthyStartersForTeam,
@@ -525,6 +526,19 @@ export function initCareerLeague(
   const maxWeeks = (allTeams.length - 1) * 2; // 38 weeks for 20 teams
   const humanNamesLabel = humanTeams.map((t) => t.name).join(' ve ');
 
+  const teamCareer: Record<number, TeamCareerState> = {};
+  humanTeams.forEach((tm, idx) => {
+    teamCareer[idx] = {
+      clubFunds: Math.max(15, (budgetTotal || 360) - tm.spent),
+      sponsorName: 'Yok',
+      moraleMod: 0,
+      lastResult: null,
+      usedEventIds: [],
+      activeEvent: null,
+      eventHistory: [],
+    };
+  });
+
   const league: LeagueState = {
     leagueName,
     week: 1,
@@ -545,6 +559,7 @@ export function initCareerLeague(
     activeNews: null,
     pendingNewsAfterEvent: null,
     eventHistory: [],
+    teamCareer,
     newsFeed: [
       {
         week: 1,
@@ -1015,481 +1030,629 @@ export function triggerWeeklyTeamNews(
   }
 }
 
-export function buildCareerEventsCatalog(lg: LeagueState, userTeam: Team): CareerEvent[] {
+export function ensureTeamCareerState(lg: LeagueState, teamIdx: number): TeamCareerState {
+  if (!lg.teamCareer) {
+    lg.teamCareer = {};
+  }
+  if (!lg.teamCareer[teamIdx]) {
+    lg.teamCareer[teamIdx] = {
+      clubFunds: teamIdx === 0 ? lg.clubFunds : 20,
+      sponsorName: teamIdx === 0 ? lg.sponsorName : 'Yok',
+      moraleMod: teamIdx === 0 ? lg.moraleMod : 0,
+      lastResult: teamIdx === 0 ? lg.lastResult : null,
+      usedEventIds: teamIdx === 0 ? [...lg.usedEventIds] : [],
+      activeEvent: teamIdx === 0 ? lg.activeEvent : null,
+      eventHistory: teamIdx === 0 ? [...lg.eventHistory] : [],
+    };
+  }
+  return lg.teamCareer[teamIdx];
+}
+
+export function syncTopLevelCareerMirrorForTeam0(lg: LeagueState): void {
+  const tc0 = lg.teamCareer?.[0];
+  if (!tc0) return;
+  lg.clubFunds = tc0.clubFunds;
+  lg.sponsorName = tc0.sponsorName;
+  lg.moraleMod = tc0.moraleMod;
+  lg.lastResult = tc0.lastResult;
+  lg.activeEvent = tc0.activeEvent;
+  lg.eventHistory = [...tc0.eventHistory];
+  lg.usedEventIds = new Set(tc0.usedEventIds);
+}
+
+export function applyCareerEventChoice(
+  lg: LeagueState,
+  userTeam: Team,
+  teamIdx: number,
+  eventId: string,
+  choiceIdx: number,
+  targetPlayerId?: number,
+  benchPlayerId?: number
+): string {
+  const tc = ensureTeamCareerState(lg, teamIdx);
   ensureTeamLineup(userTeam, lg, true);
   const healthyStarters = (userTeam.starters || []).filter((p) => !lg.injuries[p.id]);
+  const fallbackPlayer = {
+    id: 0,
+    n: 'Takım Kaptanı',
+    pos: 'MID' as const,
+    r: 85,
+    c: userTeam.name || 'Kulüp',
+  };
+  const starPlayer =
+    (targetPlayerId != null
+      ? userTeam.picks.find((p) => p.id === targetPlayerId)
+      : undefined) ||
+    [...healthyStarters].sort((a, b) => b.r - a.r)[0] ||
+    (userTeam.starters && userTeam.starters[0]) ||
+    userTeam.picks[0] ||
+    fallbackPlayer;
+  const randomStarter =
+    (targetPlayerId != null
+      ? userTeam.picks.find((p) => p.id === targetPlayerId)
+      : undefined) ||
+    healthyStarters[0] ||
+    starPlayer;
+  const benchSub =
+    (benchPlayerId != null
+      ? userTeam.picks.find((p) => p.id === benchPlayerId)
+      : undefined) ||
+    (userTeam.bench || []).find((b) => b.pos === randomStarter.pos && !lg.injuries[b.id]) ||
+    (userTeam.bench && userTeam.bench[0]);
+
+  let outcome = '';
+
+  if (eventId === 'sponsor') {
+    if (choiceIdx === 0) {
+      tc.clubFunds += 32;
+      tc.sponsorName = 'Qatar Airways';
+      tc.moraleMod = Math.max(-15, tc.moraleMod - 2);
+      outcome =
+        'Qatar Airways ana sponsor oldu! Kasaya +32 M€ girdi, ticari çekimler nedeniyle kondisyonda -%2 yorgunluk oluştu.';
+    } else if (choiceIdx === 1) {
+      tc.clubFunds += 24;
+      tc.sponsorName = 'Etihad Airways';
+      tc.moraleMod += 2;
+      outcome =
+        'Etihad Airways ile anlaşma imzalandı! Kasaya +24 M€ eklendi ve yenilenen antrenman tesisleriyle performans +%2 arttı.';
+    } else {
+      tc.clubFunds += 18;
+      tc.sponsorName = 'Fly Emirates';
+      tc.moraleMod += 4;
+      outcome =
+        'Fly Emirates sponsorluğu açıklandı (+18 M€)! Kulüp prestiji ve oyuncu morali +%4 yükseldi.';
+    }
+  } else if (eventId === 'bad_pitch') {
+    if (choiceIdx === 0) {
+      tc.clubFunds = Math.max(0, tc.clubFunds - 12);
+      tc.moraleMod += 3;
+      outcome =
+        '12 M€ harcanarak stadyuma birinci sınıf hibrit çim serildi! Takımın pas temposu +%3 yükseldi.';
+    } else {
+      tc.moraleMod = Math.max(-15, tc.moraleMod - 2);
+      outcome = 'Bozuk zeminde teknik oyundan vazgeçildi; takım performansı -%2 etkilendi.';
+    }
+  } else if (eventId === 'media_backlash') {
+    if (choiceIdx === 0) {
+      tc.moraleMod += 4;
+      outcome = 'Takım dış eleştirilere kulaklarını tıkayıp kenetlendi (+%4 performans).';
+    } else if (choiceIdx === 1) {
+      tc.moraleMod += 3;
+      outcome = 'Oyuncuları koruyan tavrın soyunma odasında güven yarattı (+%3 performans).';
+    } else {
+      tc.clubFunds += 6;
+      tc.moraleMod = Math.max(-15, tc.moraleMod - 4);
+      outcome =
+        'Oyunculara 6 M€ para cezası kesildi ancak soyunma odasında huzursuzluk oluştu (-%4 performans).';
+    }
+  } else if (eventId === 'injury') {
+    if (choiceIdx === 0) {
+      tc.clubFunds = Math.max(0, tc.clubFunds - 8);
+      lg.injuries[randomStarter.id] = 1;
+      if (benchSub && userTeam.starters && userTeam.bench) {
+        const sIdx = userTeam.starters.findIndex((x) => x.id === randomStarter.id);
+        const bIdx = userTeam.bench.findIndex((x) => x.id === benchSub.id);
+        if (sIdx >= 0 && bIdx >= 0) {
+          userTeam.starters[sIdx] = benchSub;
+          userTeam.bench[bIdx] = randomStarter;
+        }
+      }
+      outcome = `${randomStarter.n} özel kliniğe gönderildi (1 hafta dinlenecek, yerine ${benchSub ? benchSub.n : 'yedek oyuncu'} İlk 11'e alındı).`;
+    } else {
+      lg.injuries[randomStarter.id] = 3;
+      if (benchSub && userTeam.starters && userTeam.bench) {
+        const sIdx = userTeam.starters.findIndex((x) => x.id === randomStarter.id);
+        const bIdx = userTeam.bench.findIndex((x) => x.id === benchSub.id);
+        if (sIdx >= 0 && bIdx >= 0) {
+          userTeam.starters[sIdx] = benchSub;
+          userTeam.bench[bIdx] = randomStarter;
+        }
+      }
+      outcome = `${randomStarter.n} 3 hafta kadro dışı kaldı; ${benchSub ? benchSub.n : 'yedek oyuncu'} İlk 11'e geçti.`;
+    }
+  } else if (eventId === 'takeover') {
+    if (choiceIdx === 0) {
+      tc.clubFunds += 35;
+      tc.moraleMod += 3;
+      outcome =
+        'Yatırım fonu ortaklığı onaylandı! Kulüp kasasına +35 M€ eklendi ve primlerle takım morali +%3 arttı.';
+    } else {
+      tc.moraleMod += 5;
+      outcome =
+        'Taraftarlar bağımsızlık kararını coşkuyla karşıladı! Saha içi performans +%5 yükseldi.';
+    }
+  } else if (eventId === 'transfer_bid') {
+    if (choiceIdx === 0) {
+      tc.clubFunds = Math.max(0, tc.clubFunds - 10);
+      starPlayer.r = Math.min(99, starPlayer.r + 1);
+      outcome = `${starPlayer.n} takımda kaldı! Yeni sözleşme sonrası oyuncunun genel performansı yükselişe geçti.`;
+    } else {
+      tc.moraleMod += 2;
+      outcome = `${starPlayer.n} sezon sonuna kadar şampiyonluk yarışına odaklanmaya ikna edildi (+%2 uyum).`;
+    }
+  } else if (eventId === 'var_referee') {
+    if (choiceIdx === 0) {
+      tc.moraleMod += 4;
+      outcome = 'Resmi bildiri sonrası tribünler kenetlendi (+%4 saha içi baskı avantajı).';
+    } else {
+      tc.moraleMod += 2;
+      outcome = 'Oyuncular kart görmemek ve oyuna odaklanmak konusunda uyarıldı (+%2 disiplin).';
+    }
+  } else if (eventId === 'dressing_room_crisis') {
+    if (choiceIdx === 0) {
+      tc.clubFunds += 5;
+      tc.moraleMod += 3;
+      outcome = 'Tavizsiz disiplinin takımda saygı uyandırdı (+5 M€ ceza geliri, +%3 takım disiplini).';
+    } else {
+      tc.moraleMod = Math.max(-15, tc.moraleMod - 3);
+      outcome = 'Yıldıza ayrıcalık tanıman diğer oyuncuların tepkisini çekti (-%3 takım uyumu).';
+    }
+  } else if (eventId === 'fan_protest') {
+    if (choiceIdx === 0) {
+      tc.clubFunds = Math.max(0, tc.clubFunds - 6);
+      tc.moraleMod += 5;
+      outcome =
+        'Bilet indirimi sonrası stadyum tamamen doldu! Tribün desteğiyle takım performansı +%5 arttı.';
+    } else {
+      tc.moraleMod = Math.max(-15, tc.moraleMod - 3);
+      outcome = 'Tribünlerdeki protesto nedeniyle iç saha atmosferi soğudu (-%3 performans).';
+    }
+  } else if (eventId === 'youth_boost') {
+    if (choiceIdx === 0) {
+      randomStarter.r = Math.min(99, randomStarter.r + 1);
+      outcome = `${randomStarter.n} ödüllendirildi ve kalıcı form gelişimi sağladı!`;
+    } else {
+      tc.moraleMod += 3;
+      outcome = 'Takım içi kolej havası güçlendi, genel saha performansı +%3 arttı!';
+    }
+  } else if (eventId === 'friendly_cup') {
+    if (choiceIdx === 0) {
+      tc.clubFunds += 16;
+      tc.moraleMod = Math.max(-15, tc.moraleMod - 2);
+      outcome =
+        'Özel dostluk maçından kasaya +16 M€ girdi; seyahat temposu nedeniyle formda -%2 düşüş yaşandı.';
+    } else {
+      tc.moraleMod += 3;
+      outcome =
+        'Seyahat teklifi reddedildi; tesislerde yapılan özel taktik çalışmayla takım formu +%3 yükseldi.';
+    }
+  } else if (eventId === 'analytics_lab') {
+    if (choiceIdx === 0) {
+      tc.clubFunds = Math.max(0, tc.clubFunds - 10);
+      tc.moraleMod += 4;
+      outcome =
+        '10 M€ yatırımla veri analiz laboratuvarı kuruldu! Takımın taktik hazırlığı +%4 güçlendi.';
+    } else {
+      tc.moraleMod += 1;
+      outcome = 'Bütçe korundu, mevcut teknik analiz ekibiyle çalışmalara devam edildi (+%1 odak).';
+    }
+  } else if (eventId === 'bonus_revision') {
+    if (choiceIdx === 0) {
+      tc.clubFunds = Math.max(0, tc.clubFunds - 8);
+      tc.moraleMod += 5;
+      outcome =
+        "8 M€'luk yeni prim paketi açıklandı! Soyunma odasında şampiyonluk hırsı +%5 arttı.";
+    } else {
+      tc.moraleMod = Math.max(-15, tc.moraleMod - 2);
+      outcome = 'Prim talebi sezon sonuna ertelendi; bazı oyuncularda -%2 motivasyon kaybı oluştu.';
+    }
+  } else if (eventId === 'stadium_vip') {
+    if (choiceIdx === 0) {
+      tc.clubFunds += 15;
+      outcome = 'Yeni VIP locaların satışından kulüp kasasına +15 M€ sıcak para girdi!';
+    } else {
+      tc.moraleMod += 4;
+      outcome =
+        'Tribünler ateşli taraftar gruplarına tahsis edildi! İç saha atmosferi +%4 güçlendi.';
+    }
+  } else if (eventId === 'recovery_protocol') {
+    if (choiceIdx === 0) {
+      tc.clubFunds = Math.max(0, tc.clubFunds - 6);
+      tc.moraleMod += 3;
+      const myPlayerIds = new Set(userTeam.picks.map((p) => p.id));
+      for (const pidStr of Object.keys(lg.injuries)) {
+        const pid = Number(pidStr);
+        if (!myPlayerIds.has(pid)) continue;
+        if (lg.suspensions && lg.suspensions[pid]) continue;
+        lg.injuries[pid] = Math.max(0, lg.injuries[pid] - 1);
+        if (lg.injuries[pid] <= 0) delete lg.injuries[pid];
+      }
+      outcome =
+        'Rejenerasyon merkezi devreye girdi! Oyuncu kondisyonu +%3 arttı ve mevcut sakatlık süreleri kısaldı.';
+    } else {
+      outcome = 'Sağlık ekibi standart dinlenme protokolüyle haftayı tamamladı.';
+    }
+  } else if (eventId === 'saudi_mega_offer') {
+    if (choiceIdx === 0) {
+      tc.clubFunds = Math.max(0, tc.clubFunds - 9);
+      starPlayer.r = Math.min(99, starPlayer.r + 1);
+      outcome = `${starPlayer.n} astronomik teklifi reddedip takımda kaldı! Özel sadakat primiyle seviyesi yükseldi.`;
+    } else {
+      tc.moraleMod = Math.max(-15, tc.moraleMod - 2);
+      outcome = `Transfer teklifi reddedildi ancak ${starPlayer.n} cephesinde kısa süreli kırgınlık yaşandı (-%2 moral).`;
+    }
+  } else if (eventId === 'docuseries_deal') {
+    if (choiceIdx === 0) {
+      tc.clubFunds += 20;
+      tc.moraleMod = Math.max(-15, tc.moraleMod - 2);
+      outcome =
+        'Belgesel anlaşmasıyla kasaya +20 M€ girdi; soyunma odasındaki kameralar konsantrasyonu -%2 etkiledi.';
+    } else {
+      tc.moraleMod += 3;
+      outcome =
+        'Kameraları soyunma odasına sokmadın; oyuncuların sana olan güveni ve saha içi uyumu +%3 arttı.';
+    }
+  }
+
+  if (teamIdx === 0) {
+    syncTopLevelCareerMirrorForTeam0(lg);
+  }
+  return outcome;
+}
+
+export function resolveTeamCareerEventChoice(
+  lg: LeagueState,
+  teams: Team[],
+  teamIdx: number,
+  choiceIdx: number
+): string {
+  const tc = ensureTeamCareerState(lg, teamIdx);
+  const activeEv = tc.activeEvent || (teamIdx === 0 ? lg.activeEvent : null);
+  const userTeam = teams[teamIdx] || teams[0];
+  if (!activeEv || !userTeam) return '';
+
+  const outcome = applyCareerEventChoice(
+    lg,
+    userTeam,
+    teamIdx,
+    activeEv.id,
+    choiceIdx,
+    activeEv.targetPlayerId,
+    activeEv.benchPlayerId
+  );
+
+  tc.eventHistory.unshift({
+    week: lg.week,
+    title: activeEv.title,
+    outcome,
+  });
+  if (teamIdx === 0) {
+    syncTopLevelCareerMirrorForTeam0(lg);
+  }
+  return outcome;
+}
+
+export function buildCareerEventsCatalog(
+  lg: LeagueState,
+  userTeam: Team,
+  teamIdx = 0
+): CareerEvent[] {
+  ensureTeamLineup(userTeam, lg, true);
+  const tc = ensureTeamCareerState(lg, teamIdx);
+  const healthyStarters = (userTeam.starters || []).filter((p) => !lg.injuries[p.id]);
+  const fallbackPlayer = {
+    id: 0,
+    n: 'Takım Kaptanı',
+    pos: 'MID' as const,
+    r: 85,
+    c: userTeam.name || 'Kulüp',
+  };
   const starPlayer =
     [...healthyStarters].sort((a, b) => b.r - a.r)[0] ||
     (userTeam.starters && userTeam.starters[0]) ||
-    userTeam.picks[0];
+    userTeam.picks[0] ||
+    fallbackPlayer;
   const randomStarter =
     healthyStarters[(Math.random() * healthyStarters.length) | 0] || starPlayer;
   const benchSub =
     (userTeam.bench || []).find((b) => b.pos === randomStarter.pos && !lg.injuries[b.id]) ||
     (userTeam.bench && userTeam.bench[0]);
-  const lastRes = lg.lastResult || { userGoals: 0, oppGoals: 2, oppName: 'Rakip' };
+  const lastRes =
+    tc.lastResult ||
+    (teamIdx === 0 ? lg.lastResult : null) || {
+      userGoals: 0,
+      oppGoals: 2,
+      oppName: 'Rakip',
+    };
+
+  const makeChoice = (
+    eventId: string,
+    choiceIdx: number,
+    label: string,
+    targetPid?: number,
+    benchPid?: number
+  ) => ({
+    choiceIdx,
+    label,
+    effect: ({ lg: state, userTeam: tm, teamIdx: tIdx }: { lg: LeagueState; userTeam: Team; teamIdx?: number }) =>
+      applyCareerEventChoice(
+        state,
+        tm,
+        tIdx ?? teamIdx,
+        eventId,
+        choiceIdx,
+        targetPid,
+        benchPid
+      ),
+  });
 
   return [
     {
       id: 'sponsor',
+      teamIdx,
       tag: 'Sponsorluk Masası · Ticari Anlaşma',
       title: "Etihad Airways, Qatar Airways ve Emirates'ten Forma Sponsorluğu Teklifi!",
       desc: `Kulübünün Premier Lig'deki yükselişi sonrası 3 dev havayolu şirketi göğüs sponsorluğu için teklif sundu: Qatar Airways en yüksek nakit paketi verirken yoğun tanıtım turu istiyor; Etihad Airways dengeli bütçe ve tesis desteği sunuyor; Emirates ise şampiyonluk primli prestij paketi öneriyor.`,
       choices: [
-        {
-          label: 'Qatar Airways ile İmzala (+32 M€ Nakit · Tanıtım Turu: -%2 Kondisyon)',
-          effect: ({ lg: state }) => {
-            state.clubFunds += 32;
-            state.sponsorName = 'Qatar Airways';
-            state.moraleMod = Math.max(-15, state.moraleMod - 2);
-            return 'Qatar Airways ana sponsor oldu! Kasaya +32 M€ girdi, ticari çekimler nedeniyle kondisyonda -%2 yorgunluk oluştu.';
-          },
-        },
-        {
-          label: 'Etihad Airways ile İmzala (+24 M€ Nakit · Tesis Desteği: +%2 Performans)',
-          effect: ({ lg: state }) => {
-            state.clubFunds += 24;
-            state.sponsorName = 'Etihad Airways';
-            state.moraleMod += 2;
-            return 'Etihad Airways ile anlaşma imzalandı! Kasaya +24 M€ eklendi ve yenilenen antrenman tesisleriyle performans +%2 arttı.';
-          },
-        },
-        {
-          label: 'Fly Emirates Prestij Paketi (+18 M€ Nakit · +%4 Takım Morali)',
-          effect: ({ lg: state }) => {
-            state.clubFunds += 18;
-            state.sponsorName = 'Fly Emirates';
-            state.moraleMod += 4;
-            return 'Fly Emirates sponsorluğu açıklandı (+18 M€)! Kulüp prestiji ve oyuncu morali +%4 yükseldi.';
-          },
-        },
+        makeChoice('sponsor', 0, 'Qatar Airways ile İmzala (+32 M€ Nakit · Tanıtım Turu: -%2 Kondisyon)'),
+        makeChoice('sponsor', 1, 'Etihad Airways ile İmzala (+24 M€ Nakit · Tesis Desteği: +%2 Performans)'),
+        makeChoice('sponsor', 2, 'Fly Emirates Prestij Paketi (+18 M€ Nakit · +%4 Takım Morali)'),
       ],
     },
     {
       id: 'bad_pitch',
+      teamIdx,
       tag: 'Stadyum & Saha Krizi',
       title: 'Stadyum Zemini Çok Kötü Durumda!',
       desc: 'Yoğun yağış ve maç trafiği sonrasında stadyum zemini balçık ve çukurlarla doldu. Pas oyununuz aksıyor ve sakatlık riski arttı. Zemin için nasıl bir adım atacaksın?',
       choices: [
-        {
-          label: 'Hibrit Çim Zemini Acilen Yenilet (-12 M€ · +%3 Saha Performansı)',
-          effect: ({ lg: state }) => {
-            state.clubFunds = Math.max(0, state.clubFunds - 12);
-            state.moraleMod += 3;
-            return '12 M€ harcanarak stadyuma birinci sınıf hibrit çim serildi! Takımın pas temposu +%3 yükseldi.';
-          },
-        },
-        {
-          label: 'Kısmi Bakım Yaptır ve Uzun Top Taktiğine Geç (Ücretsiz · -%2 Performans)',
-          effect: ({ lg: state }) => {
-            state.moraleMod = Math.max(-15, state.moraleMod - 2);
-            return 'Bozuk zeminde teknik oyundan vazgeçildi; takım performansı -%2 etkilendi.';
-          },
-        },
+        makeChoice('bad_pitch', 0, 'Hibrit Çim Zemini Acilen Yenilet (-12 M€ · +%3 Saha Performansı)'),
+        makeChoice('bad_pitch', 1, 'Kısmi Bakım Yaptır ve Uzun Top Taktiğine Geç (Ücretsiz · -%2 Performans)'),
       ],
     },
     {
       id: 'media_backlash',
+      teamIdx,
       tag: 'Spor Gündemi · Mağlubiyet Yankıları',
       title: 'Mağlubiyet Sonrası Gazetelerde Sert Eleştiri!',
       desc: `${lastRes.oppName} karşısında alınan ${lastRes.userGoals}-${lastRes.oppGoals}'lik yenilgi sonrası spor basını takımın taktik disiplinini ağır şekilde eleştirdi. Soyunma odasında moraller bozuk.`,
       choices: [
-        {
-          label: 'Tesisleri Dış Dünyaya Kapat & Takımı Kenetle (+%4 Odaklanma)',
-          effect: ({ lg: state }) => {
-            state.moraleMod += 4;
-            return 'Takım dış eleştirilere kulaklarını tıkayıp kenetlendi (+%4 performans).';
-          },
-        },
-        {
-          label: 'Oyunculara Tam Destek Ver (+%3 Oyuncu Sadakati)',
-          effect: ({ lg: state }) => {
-            state.moraleMod += 3;
-            return 'Oyuncuları koruyan tavrın soyunma odasında güven yarattı (+%3 performans).';
-          },
-        },
-        {
-          label: 'Disiplin Cezası Kes (+6 M€ Kasa · -%4 Moral)',
-          effect: ({ lg: state }) => {
-            state.clubFunds += 6;
-            state.moraleMod = Math.max(-15, state.moraleMod - 4);
-            return 'Oyunculara 6 M€ para cezası kesildi ancak soyunma odasında huzursuzluk oluştu (-%4 performans).';
-          },
-        },
+        makeChoice('media_backlash', 0, 'Tesisleri Dış Dünyaya Kapat & Takımı Kenetle (+%4 Odaklanma)'),
+        makeChoice('media_backlash', 1, 'Oyunculara Tam Destek Ver (+%3 Oyuncu Sadakati)'),
+        makeChoice('media_backlash', 2, 'Disiplin Cezası Kes (+6 M€ Kasa · -%4 Moral)'),
       ],
     },
     {
       id: 'injury',
+      teamIdx,
+      targetPlayerId: randomStarter.id,
+      benchPlayerId: benchSub?.id,
       tag: 'Sağlık Raporu · Sakatlık Krizi',
       title: `${randomStarter.n} Antrenmanda Sakatlandı!`,
       desc: `İlk 11 oyuncun ${randomStarter.n} arka adalesinden sakatlık geçirdi. Sağlık ekibi normal şartlarda 3 hafta sahalardan uzak kalacağını bildirdi.`,
       choices: [
-        {
-          label: 'Özel Klinik Tedavisi Uygula (-8 M€ · 1 Hafta Sonra Döner)',
-          effect: ({ lg: state, userTeam: tm }) => {
-            state.clubFunds = Math.max(0, state.clubFunds - 8);
-            state.injuries[randomStarter.id] = 1;
-            if (benchSub && tm.starters && tm.bench) {
-              const sIdx = tm.starters.findIndex((x) => x.id === randomStarter.id);
-              const bIdx = tm.bench.findIndex((x) => x.id === benchSub.id);
-              if (sIdx >= 0 && bIdx >= 0) {
-                tm.starters[sIdx] = benchSub;
-                tm.bench[bIdx] = randomStarter;
-              }
-            }
-            return `${randomStarter.n} özel kliniğe gönderildi (1 hafta dinlenecek, yerine ${benchSub ? benchSub.n : 'yedek oyuncu'} İlk 11'e alındı).`;
-          },
-        },
-        {
-          label: 'Standart Dinlendirme (3 Hafta Yok · Yedek Oyuncu Oynar)',
-          effect: ({ lg: state, userTeam: tm }) => {
-            state.injuries[randomStarter.id] = 3;
-            if (benchSub && tm.starters && tm.bench) {
-              const sIdx = tm.starters.findIndex((x) => x.id === randomStarter.id);
-              const bIdx = tm.bench.findIndex((x) => x.id === benchSub.id);
-              if (sIdx >= 0 && bIdx >= 0) {
-                tm.starters[sIdx] = benchSub;
-                tm.bench[bIdx] = randomStarter;
-              }
-            }
-            return `${randomStarter.n} 3 hafta kadro dışı kaldı; ${benchSub ? benchSub.n : 'yedek oyuncu'} İlk 11'e geçti.`;
-          },
-        },
+        makeChoice('injury', 0, 'Özel Klinik Tedavisi Uygula (-8 M€ · 1 Hafta Sonra Döner)', randomStarter.id, benchSub?.id),
+        makeChoice('injury', 1, 'Standart Dinlendirme (3 Hafta Yok · Yedek Oyuncu Oynar)', randomStarter.id, benchSub?.id),
       ],
     },
     {
       id: 'takeover',
+      teamIdx,
       tag: 'Yönetim Kurulu · Yatırım Teklifi',
       title: 'Kulübe Uluslararası Yatırım Fonu Ortaklık Teklifi!',
       desc: `Küresel bir yatırım fonu ${userTeam.name} hisselerinin %35'ini satın alarak kulübe sermaye girişi sağlamak istiyor.`,
       choices: [
-        {
-          label: 'Ortaklığı Onayla (+35 M€ Kulüp Kasası · +%3 Şampiyonluk Primi)',
-          effect: ({ lg: state }) => {
-            state.clubFunds += 35;
-            state.moraleMod += 3;
-            return 'Yatırım fonu ortaklığı onaylandı! Kulüp kasasına +35 M€ eklendi ve primlerle takım morali +%3 arttı.';
-          },
-        },
-        {
-          label: 'Teklifi Reddet & Kulüp Yapısını Koru (+%5 Taraftar Desteği)',
-          effect: ({ lg: state }) => {
-            state.moraleMod += 5;
-            return 'Taraftarlar bağımsızlık kararını coşkuyla karşıladı! Saha içi performans +%5 yükseldi.';
-          },
-        },
+        makeChoice('takeover', 0, 'Ortaklığı Onayla (+35 M€ Kulüp Kasası · +%3 Şampiyonluk Primi)'),
+        makeChoice('takeover', 1, 'Teklifi Reddet & Kulüp Yapısını Koru (+%5 Taraftar Desteği)'),
       ],
     },
     {
       id: 'transfer_bid',
+      teamIdx,
+      targetPlayerId: starPlayer.id,
       tag: 'Transfer Masası · Astronomik Teklif',
       title: `Avrupa Devinden ${starPlayer.n} İçin Astronomik Teklif!`,
       desc: `Avrupa'nın dev kulüplerinden biri yıldız oyuncun ${starPlayer.n} için kulüp yönetimine reddedilmesi güç bir teklif sundu. Oyuncunun kafası karışık.`,
       choices: [
-        {
-          label: 'Teklifi Reddet & Maaş İyileştirmesi Yap (-10 M€ · Yıldız Form Artışı)',
-          effect: ({ lg: state }) => {
-            state.clubFunds = Math.max(0, state.clubFunds - 10);
-            starPlayer.r = Math.min(99, starPlayer.r + 1);
-            return `${starPlayer.n} takımda kaldı! Yeni sözleşme sonrası oyuncunun genel performansı yükselişe geçti.`;
-          },
-        },
-        {
-          label: 'Oyuncuyla Görüşüp Sezon Sonuna Söz Al (Maliyetsiz · +%2 Uyum)',
-          effect: ({ lg: state }) => {
-            state.moraleMod += 2;
-            return `${starPlayer.n} sezon sonuna kadar şampiyonluk yarışına odaklanmaya ikna edildi (+%2 uyum).`;
-          },
-        },
+        makeChoice('transfer_bid', 0, 'Teklifi Reddet & Maaş İyileştirmesi Yap (-10 M€ · Yıldız Form Artışı)', starPlayer.id),
+        makeChoice('transfer_bid', 1, 'Oyuncuyla Görüşüp Sezon Sonuna Söz Al (Maliyetsiz · +%2 Uyum)', starPlayer.id),
       ],
     },
     {
       id: 'var_referee',
+      teamIdx,
       tag: 'Hakem & VAR Gündemi · PGMOL',
       title: 'Tartışmalı VAR Kararları ve Kritik Hakem Ataması!',
       desc: 'Son haftalardaki tartışmalı VAR kararları gündemdeyken bu haftaki kritik maça da en çok tartışılan hakem triosu atandı.',
       choices: [
-        {
-          label: 'Resmi Kulüp Bildirisi Yayınla ve VAR Kayıtlarını İste (+%4 Tribün Baskısı)',
-          effect: ({ lg: state }) => {
-            state.moraleMod += 4;
-            return 'Resmi bildiri sonrası tribünler kenetlendi (+%4 saha içi baskı avantajı).';
-          },
-        },
-        {
-          label: "Takıma 'Sadece Oyuna Odaklanın' Talimatı Ver (+%2 Taktik Disiplin)",
-          effect: ({ lg: state }) => {
-            state.moraleMod += 2;
-            return 'Oyuncular kart görmemek ve oyuna odaklanmak konusunda uyarıldı (+%2 disiplin).';
-          },
-        },
+        makeChoice('var_referee', 0, 'Resmi Kulüp Bildirisi Yayınla ve VAR Kayıtlarını İste (+%4 Tribün Baskısı)'),
+        makeChoice('var_referee', 1, "Takıma 'Sadece Oyuna Odaklanın' Talimatı Ver (+%2 Taktik Disiplin)"),
       ],
     },
     {
       id: 'dressing_room_crisis',
+      teamIdx,
+      targetPlayerId: starPlayer.id,
       tag: 'Soyunma Odası · Disiplin Krizi',
       title: `${starPlayer.n} Sabah Antrenmanına Geç Kaldı!`,
       desc: `Yıldız oyuncun ${starPlayer.n} kritik hafta öncesinde sabah idmanına izinsiz şekilde geç katıldı. Takım arkadaşları vereceğin kararı bekliyor.`,
       choices: [
-        {
-          label: 'Para Cezası Kes ve Disiplini Koru (+5 M€ Kasa · +%3 Disiplin)',
-          effect: ({ lg: state }) => {
-            state.clubFunds += 5;
-            state.moraleMod += 3;
-            return 'Tavizsiz disiplinin takımda saygı uyandırdı (+5 M€ ceza geliri, +%3 takım disiplini).';
-          },
-        },
-        {
-          label: 'Olayı Kapat ve Yıldız Oyuncuyu Uyarmakla Yetin (-%3 Takım İçi Adalet)',
-          effect: ({ lg: state }) => {
-            state.moraleMod = Math.max(-15, state.moraleMod - 3);
-            return 'Yıldıza ayrıcalık tanıman diğer oyuncuların tepkisini çekti (-%3 takım uyumu).';
-          },
-        },
+        makeChoice('dressing_room_crisis', 0, 'Para Cezası Kes ve Disiplini Koru (+5 M€ Kasa · +%3 Disiplin)', starPlayer.id),
+        makeChoice('dressing_room_crisis', 1, 'Olayı Kapat ve Yıldız Oyuncuyu Uyarmakla Yetin (-%3 Takım İçi Adalet)', starPlayer.id),
       ],
     },
     {
       id: 'fan_protest',
+      teamIdx,
       tag: 'Tribün Gündemi · Bilet Fiyatları',
       title: 'Taraftarlardan Bilet Fiyatları Tepkisi!',
       desc: 'Kale arkası taraftar grupları, artan bilet fiyatları nedeniyle bu haftaki maçın ilk 15 dakikasında protesto hazırlığında.',
       choices: [
-        {
-          label: 'Bilet Fiyatlarında %25 İndirim Yap (-6 M€ · +%5 Tribün Desteği)',
-          effect: ({ lg: state }) => {
-            state.clubFunds = Math.max(0, state.clubFunds - 6);
-            state.moraleMod += 5;
-            return 'Bilet indirimi sonrası stadyum tamamen doldu! Tribün desteğiyle takım performansı +%5 arttı.';
-          },
-        },
-        {
-          label: 'Fiyatları Sabit Tut (Gelir Kaybı Yok · -%3 Tribün Desteği)',
-          effect: ({ lg: state }) => {
-            state.moraleMod = Math.max(-15, state.moraleMod - 3);
-            return 'Tribünlerdeki protesto nedeniyle iç saha atmosferi soğudu (-%3 performans).';
-          },
-        },
+        makeChoice('fan_protest', 0, 'Bilet Fiyatlarında %25 İndirim Yap (-6 M€ · +%5 Tribün Desteği)'),
+        makeChoice('fan_protest', 1, 'Fiyatları Sabit Tut (Gelir Kaybı Yok · -%3 Tribün Desteği)'),
       ],
     },
     {
       id: 'youth_boost',
+      teamIdx,
+      targetPlayerId: randomStarter.id,
       tag: 'Antrenman Raporu · Bireysel Gelişim',
       title: `${randomStarter.n} Antrenmanlarda Parlıyor!`,
       desc: `Teknik heyet, ${randomStarter.n} isimli oyuncunun son haftalarda ekstra şut ve kondisyon çalışarak formunun zirvesine çıktığını raporladı.`,
       choices: [
-        {
-          label: 'Özel Prim Ver & Sorumluluğunu Artır (Kalıcı Gelişim)',
-          effect: () => {
-            randomStarter.r = Math.min(99, randomStarter.r + 1);
-            return `${randomStarter.n} ödüllendirildi ve kalıcı form gelişimi sağladı!`;
-          },
-        },
-        {
-          label: 'Tüm Takıma Moral Yemeği Düzenle (+%3 Takım Performansı)',
-          effect: ({ lg: state }) => {
-            state.moraleMod += 3;
-            return 'Takım içi kolej havası güçlendi, genel saha performansı +%3 arttı!';
-          },
-        },
+        makeChoice('youth_boost', 0, 'Özel Prim Ver & Sorumluluğunu Artır (Kalıcı Gelişim)', randomStarter.id),
+        makeChoice('youth_boost', 1, 'Tüm Takıma Moral Yemeği Düzenle (+%3 Takım Performansı)', randomStarter.id),
       ],
     },
     {
       id: 'friendly_cup',
+      teamIdx,
       tag: 'Uluslararası Davet · Özel Gösteri Maçı',
       title: 'Riyad Sezon İçi Dostluk Kupası Daveti!',
       desc: 'Uluslararası organizatörler, fikstür arasındaki boşlukta kulübünü özel bir gösteri maçına davet etti. Katılırsan ciddi bir yayın geliri elde edeceksin ancak yolculuk takımı yorabilir.',
       choices: [
-        {
-          label: 'Daveti Kabul Et (+16 M€ Gelir · Yolculuk Yorgunluğu: -%2 Form)',
-          effect: ({ lg: state }) => {
-            state.clubFunds += 16;
-            state.moraleMod = Math.max(-15, state.moraleMod - 2);
-            return 'Özel dostluk maçından kasaya +16 M€ girdi; seyahat temposu nedeniyle formda -%2 düşüş yaşandı.';
-          },
-        },
-        {
-          label: 'Teklifi Reddet & Tesislerde Taktik Kamp Yap (+%3 Saha İçi Uyum)',
-          effect: ({ lg: state }) => {
-            state.moraleMod += 3;
-            return 'Seyahat teklifi reddedildi; tesislerde yapılan özel taktik çalışmayla takım formu +%3 yükseldi.';
-          },
-        },
+        makeChoice('friendly_cup', 0, 'Daveti Kabul Et (+16 M€ Gelir · Yolculuk Yorgunluğu: -%2 Form)'),
+        makeChoice('friendly_cup', 1, 'Teklifi Reddet & Tesislerde Taktik Kamp Yap (+%3 Saha İçi Uyum)'),
       ],
     },
     {
       id: 'analytics_lab',
+      teamIdx,
       tag: 'Tesis Yatırımı · Futbol Teknolojisi',
       title: 'Yapay Zeka Destekli Performans & Analiz Laboratuvarı!',
       desc: 'Sportif direktörün, kulüp tesislerine oyuncu yük takibi ve rakip duran top analizi yapan yeni nesil bir veri laboratuvarı kurulmasını önerdi.',
       choices: [
-        {
-          label: 'Laboratuvarı Kur (-10 M€ · +%4 Kalıcı Taktik & Kondisyon Katkısı)',
-          effect: ({ lg: state }) => {
-            state.clubFunds = Math.max(0, state.clubFunds - 10);
-            state.moraleMod += 4;
-            return '10 M€ yatırımla veri analiz laboratuvarı kuruldu! Takımın taktik hazırlığı +%4 güçlendi.';
-          },
-        },
-        {
-          label: 'Bütçeyi Koru & Mevcut Analiz Ekibiyle Devam Et (+%1 Odak)',
-          effect: ({ lg: state }) => {
-            state.moraleMod += 1;
-            return 'Bütçe korundu, mevcut teknik analiz ekibiyle çalışmalara devam edildi (+%1 odak).';
-          },
-        },
+        makeChoice('analytics_lab', 0, 'Laboratuvarı Kur (-10 M€ · +%4 Kalıcı Taktik & Kondisyon Katkısı)'),
+        makeChoice('analytics_lab', 1, 'Bütçeyi Koru & Mevcut Analiz Ekibiyle Devam Et (+%1 Odak)'),
       ],
     },
     {
       id: 'bonus_revision',
+      teamIdx,
       tag: 'Soyunma Odası · Prim Görüşmesi',
       title: 'Takım Kaptanlarından Şampiyonluk Primi Talebi!',
       desc: 'Takım kaptanları, zorlu Premier Lig fikstürü öncesinde yönetimden maç başı ve şampiyonluk primlerinin güncellenmesini talep etti.',
       choices: [
-        {
-          label: 'Prim Paketi Güncellemesini Onayla (-8 M€ · +%5 Şampiyonluk Hırsı)',
-          effect: ({ lg: state }) => {
-            state.clubFunds = Math.max(0, state.clubFunds - 8);
-            state.moraleMod += 5;
-            return "8 M€'luk yeni prim paketi açıklandı! Soyunma odasında şampiyonluk hırsı +%5 arttı.";
-          },
-        },
-        {
-          label: 'Sezon Sonuna Kadar Mevcut Sözleşmeleri Koru (-%2 Moral)',
-          effect: ({ lg: state }) => {
-            state.moraleMod = Math.max(-15, state.moraleMod - 2);
-            return 'Prim talebi sezon sonuna ertelendi; bazı oyuncularda -%2 motivasyon kaybı oluştu.';
-          },
-        },
+        makeChoice('bonus_revision', 0, 'Prim Paketi Güncellemesini Onayla (-8 M€ · +%5 Şampiyonluk Hırsı)'),
+        makeChoice('bonus_revision', 1, 'Sezon Sonuna Kadar Mevcut Sözleşmeleri Koru (-%2 Moral)'),
       ],
     },
     {
       id: 'stadium_vip',
+      teamIdx,
       tag: 'Kulüp Ekonomisi · Stadyum Projesi',
       title: 'VIP Loca ve Maç Günü Ticari Alan Yenilemesi!',
       desc: 'Pazarlama departmanı, stadyumun batı tribününe yeni kurumsal VIP localar ekleyerek maç günü gelirlerini artırma projesini sundu.',
       choices: [
-        {
-          label: 'Kurumsal VIP Locaları Aç (+15 M€ Net Gelir)',
-          effect: ({ lg: state }) => {
-            state.clubFunds += 15;
-            return 'Yeni VIP locaların satışından kulüp kasasına +15 M€ sıcak para girdi!';
-          },
-        },
-        {
-          label: 'Alanı Gençlik & Taraftar Tribününe Ayır (+%4 İç Saha Atmosferi)',
-          effect: ({ lg: state }) => {
-            state.moraleMod += 4;
-            return 'Tribünler ateşli taraftar gruplarına tahsis edildi! İç saha atmosferi +%4 güçlendi.';
-          },
-        },
+        makeChoice('stadium_vip', 0, 'Kurumsal VIP Locaları Aç (+15 M€ Net Gelir)'),
+        makeChoice('stadium_vip', 1, 'Alanı Gençlik & Taraftar Tribününe Ayır (+%4 İç Saha Atmosferi)'),
       ],
     },
     {
       id: 'recovery_protocol',
+      teamIdx,
       tag: 'Sağlık Kurulu · Yoğun Fikstür',
       title: 'Kriyoterapi ve Rejenerasyon Merkezi Yatırımı!',
       desc: 'Sağlık ekibi, üst üste oynanan sert Premier Lig maçları sonrası kas yorgunluğunu azaltacak yeni rejenerasyon üniteleri talep ediyor.',
       choices: [
-        {
-          label: 'Rejenerasyon Ünitelerini Al (-6 M€ · Sakatlık Süreleri -1 Hafta & +%3 Form)',
-          effect: ({ lg: state }) => {
-            state.clubFunds = Math.max(0, state.clubFunds - 6);
-            state.moraleMod += 3;
-            for (const pidStr of Object.keys(state.injuries)) {
-              const pid = Number(pidStr);
-              if (state.suspensions && state.suspensions[pid]) continue;
-              state.injuries[pid] = Math.max(0, state.injuries[pid] - 1);
-              if (state.injuries[pid] <= 0) delete state.injuries[pid];
-            }
-            return 'Rejenerasyon merkezi devreye girdi! Oyuncu kondisyonu +%3 arttı ve mevcut sakatlık süreleri kısaldı.';
-          },
-        },
-        {
-          label: 'Mevcut Fizyoterapi Programıyla Devam Et (Maliyetsiz)',
-          effect: () => 'Sağlık ekibi standart dinlenme protokolüyle haftayı tamamladı.',
-        },
+        makeChoice('recovery_protocol', 0, 'Rejenerasyon Ünitelerini Al (-6 M€ · Sakatlık Süreleri -1 Hafta & +%3 Form)'),
+        makeChoice('recovery_protocol', 1, 'Mevcut Fizyoterapi Programıyla Devam Et (Maliyetsiz)'),
       ],
     },
     {
       id: 'saudi_mega_offer',
+      teamIdx,
+      targetPlayerId: starPlayer.id,
       tag: 'Transfer Masası · Suudi Pro Ligi Teklifi',
       title: `Suudi Arabistan Kulübünden ${starPlayer.n} İçin 85 M€'luk Teklif!`,
       desc: `Suudi Pro Ligi devlerinden biri, takımının en önemli yıldızı ${starPlayer.n}'a yıllık 40 M€ maaş ve kulübüne dev bir bonservis paketi sundu. Oyuncunun menajeri yönetimle acil görüşme talep etti.`,
       choices: [
-        {
-          label: 'Kapıyı Kapat & Yıldız Oyuncuya Sadakat Primi Ver (-9 M€ · Kalıcı Gelişim)',
-          effect: ({ lg: state }) => {
-            state.clubFunds = Math.max(0, state.clubFunds - 9);
-            starPlayer.r = Math.min(99, starPlayer.r + 1);
-            return `${starPlayer.n} astronomik teklifi reddedip takımda kaldı! Özel sadakat primiyle seviyesi yükseldi.`;
-          },
-        },
-        {
-          label: 'Menajeriyle Sert Konuş ve Sözleşmesini Hatırlat (Maliyetsiz · -%2 Moral)',
-          effect: ({ lg: state }) => {
-            state.moraleMod = Math.max(-15, state.moraleMod - 2);
-            return `Transfer teklifi reddedildi ancak ${starPlayer.n} cephesinde kısa süreli kırgınlık yaşandı (-%2 moral).`;
-          },
-        },
+        makeChoice('saudi_mega_offer', 0, 'Kapıyı Kapat & Yıldız Oyuncuya Sadakat Primi Ver (-9 M€ · Kalıcı Gelişim)', starPlayer.id),
+        makeChoice('saudi_mega_offer', 1, 'Menajeriyle Sert Konuş ve Sözleşmesini Hatırlat (Maliyetsiz · -%2 Moral)', starPlayer.id),
       ],
     },
     {
       id: 'docuseries_deal',
+      teamIdx,
       tag: 'Medya & Yayın · Kulüp Belgeseli',
       title: "Dijital Platformdan 'Soyunma Odası' Belgeseli Teklifi!",
       desc: 'Küresel bir dijital yayın platformu, sezon boyunca soyunma odası ve antrenman tesislerinde kamera bulundurarak kulübün şampiyonluk yürüyüşünü belgesel yapmak için yüksek bütçeli teklif sundu.',
       choices: [
-        {
-          label: 'Anlaşmayı İmzala (+20 M€ Yayın Geliri · Kameralar Nedeniyle -%2 Odak)',
-          effect: ({ lg: state }) => {
-            state.clubFunds += 20;
-            state.moraleMod = Math.max(-15, state.moraleMod - 2);
-            return 'Belgesel anlaşmasıyla kasaya +20 M€ girdi; soyunma odasındaki kameralar konsantrasyonu -%2 etkiledi.';
-          },
-        },
-        {
-          label: 'Soyunma Odası Mahremiyetini Koru & Reddet (+%3 Takım İçi Güven)',
-          effect: ({ lg: state }) => {
-            state.moraleMod += 3;
-            return 'Kameraları soyunma odasına sokmadın; oyuncuların sana olan güveni ve saha içi uyumu +%3 arttı.';
-          },
-        },
+        makeChoice('docuseries_deal', 0, 'Anlaşmayı İmzala (+20 M€ Yayın Geliri · Kameralar Nedeniyle -%2 Odak)'),
+        makeChoice('docuseries_deal', 1, 'Soyunma Odası Mahremiyetini Koru & Reddet (+%3 Takım İçi Güven)'),
       ],
     },
   ];
 }
 
-export function triggerWeeklyCareerEvent(lg: LeagueState, teams: Team[]): void {
+export function triggerCareerEventForTeam(
+  lg: LeagueState,
+  teams: Team[],
+  teamIdx: number,
+  force = false
+): void {
   if (!lg || lg.week > lg.maxWeeks) return;
-  const userTeam = teams[0];
+  const userTeam = teams[teamIdx];
+  if (!userTeam) return;
   ensureTeamLineup(userTeam, lg, true);
+  const tc = ensureTeamCareerState(lg, teamIdx);
+  const usedSet = new Set(tc.usedEventIds);
 
-  const catalog = buildCareerEventsCatalog(lg, userTeam);
+  const catalog = buildCareerEventsCatalog(lg, userTeam, teamIdx);
+  const lastRes = tc.lastResult || (teamIdx === 0 ? lg.lastResult : null);
 
-  if (lg.lastResult && lg.lastResult.userGoals < lg.lastResult.oppGoals) {
+  if (lastRes && lastRes.userGoals < lastRes.oppGoals) {
     const mediaEv = catalog.find((e) => e.id === 'media_backlash');
     if (
       mediaEv &&
-      (!lg.usedEventIds.has('media_backlash') || lg.lastResult.oppGoals - lg.lastResult.userGoals >= 2)
+      (!usedSet.has('media_backlash') || lastRes.oppGoals - lastRes.userGoals >= 2)
     ) {
-      lg.usedEventIds.add('media_backlash');
-      lg.activeEvent = mediaEv;
+      usedSet.add('media_backlash');
+      tc.usedEventIds = [...usedSet];
+      tc.activeEvent = mediaEv;
+      if (teamIdx === 0) syncTopLevelCareerMirrorForTeam0(lg);
       return;
     }
   }
 
-  if (Math.random() > 0.65) return;
+  if (!force && Math.random() > 0.65) return;
 
-  let available = catalog.filter((e) => e.id !== 'media_backlash' && !lg.usedEventIds.has(e.id));
+  let available = catalog.filter((e) => e.id !== 'media_backlash' && !usedSet.has(e.id));
   if (!available.length) {
-    lg.usedEventIds.clear();
+    usedSet.clear();
     available = catalog.filter((e) => e.id !== 'media_backlash');
   }
   const pickedEvent = available[(Math.random() * available.length) | 0];
   if (pickedEvent) {
-    lg.usedEventIds.add(pickedEvent.id);
-    lg.activeEvent = pickedEvent;
+    usedSet.add(pickedEvent.id);
+    tc.usedEventIds = [...usedSet];
+    tc.activeEvent = pickedEvent;
+    if (teamIdx === 0) syncTopLevelCareerMirrorForTeam0(lg);
   }
+}
+
+export function triggerWeeklyCareerEvent(lg: LeagueState, teams: Team[], force = false): void {
+  if (!lg || lg.week > lg.maxWeeks) return;
+  const humanIndices = teams
+    .map((tm, idx) => (tm.isHuman ? idx : -1))
+    .filter((idx) => idx >= 0);
+  if (humanIndices.length === 0) {
+    triggerCareerEventForTeam(lg, teams, 0, force);
+    return;
+  }
+  humanIndices.forEach((tIdx) => {
+    triggerCareerEventForTeam(lg, teams, tIdx, force);
+  });
 }
 
 export function finalizeCareerWeekAfterUserMatch(
@@ -1521,15 +1684,32 @@ export function finalizeCareerWeekAfterUserMatch(
     userMatch.redCards = [];
     updateLeagueTableForMatch(lg, userMatch.a, userMatch.b, sA, sB);
 
-    const aHuman = !!teams[userMatch.a]?.isHuman;
-    const userGoals = aHuman ? sA : sB;
-    const oppGoals = aHuman ? sB : sA;
-    const oppIdx = aHuman ? userMatch.b : userMatch.a;
-    lg.lastResult = {
-      userGoals,
-      oppGoals,
-      oppName: teams[oppIdx] ? teams[oppIdx].name : 'Rakip',
-    };
+    // Record lastResult independently for any human team involved in this fixture
+    if (teams[userMatch.a]?.isHuman) {
+      const tcA = ensureTeamCareerState(lg, userMatch.a);
+      tcA.lastResult = {
+        userGoals: sA,
+        oppGoals: sB,
+        oppName: teams[userMatch.b] ? teams[userMatch.b].name : 'Rakip',
+      };
+      if (userMatch.a === 0) lg.lastResult = tcA.lastResult;
+    }
+    if (teams[userMatch.b]?.isHuman) {
+      const tcB = ensureTeamCareerState(lg, userMatch.b);
+      tcB.lastResult = {
+        userGoals: sB,
+        oppGoals: sA,
+        oppName: teams[userMatch.a] ? teams[userMatch.a].name : 'Rakip',
+      };
+      if (userMatch.b === 0) lg.lastResult = tcB.lastResult;
+    }
+    if (!teams[userMatch.a]?.isHuman && !teams[userMatch.b]?.isHuman) {
+      lg.lastResult = {
+        userGoals: sA,
+        oppGoals: sB,
+        oppName: teams[userMatch.b] ? teams[userMatch.b].name : 'Rakip',
+      };
+    }
 
     (
       [

@@ -370,8 +370,17 @@ export function createInitialMatchState(
   const sA = side(teams[a], lg, isCareer);
   const sB = side(teams[b], lg, isCareer);
 
-  const initPerfA = isCareer && a === 0 && lg ? 100 + lg.moraleMod : 100;
-  const initPerfB = isCareer && b === 0 && lg ? 100 + lg.moraleMod : 100;
+  const moraleA =
+    isCareer && lg && teams[a]?.isHuman
+      ? lg.teamCareer?.[a]?.moraleMod ?? (a === 0 ? lg.moraleMod : 0)
+      : 0;
+  const moraleB =
+    isCareer && lg && teams[b]?.isHuman
+      ? lg.teamCareer?.[b]?.moraleMod ?? (b === 0 ? lg.moraleMod : 0)
+      : 0;
+
+  const initPerfA = 100 + moraleA;
+  const initPerfB = 100 + moraleB;
 
   return {
     a,
@@ -397,6 +406,7 @@ export function createInitialMatchState(
     run: 0,
     speed: 1,
     leagueWeekRecorded: false,
+    careerWeek: lg ? lg.week : 1,
   };
 }
 

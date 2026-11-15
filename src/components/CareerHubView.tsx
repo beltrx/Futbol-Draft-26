@@ -21,7 +21,7 @@ interface CareerHubViewProps {
   onSimulateSeason: () => void;
   onEditLineup: () => void;
   onResetToSetup: () => void;
-  onResolveEventChoice: (choice: CareerEventChoice) => string;
+  onResolveEventChoice: (choice: CareerEventChoice, choiceIdx: number) => string;
   onDismissEvent: () => void;
   onDismissNews: () => void;
 }
@@ -66,6 +66,16 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
     : 0;
   const userRank = standings.findIndex((r) => r.teamIdx === activeUserIdx) + 1;
   const userTeam = teams[activeUserIdx] || teams[0];
+  const myCareer = league.teamCareer?.[activeUserIdx];
+  const myFunds = myCareer ? myCareer.clubFunds : league.clubFunds;
+  const mySponsor = myCareer ? myCareer.sponsorName : league.sponsorName;
+  const myMorale = myCareer ? myCareer.moraleMod : league.moraleMod;
+  const myActiveEvent = myCareer
+    ? myCareer.activeEvent
+    : activeUserIdx === 0
+    ? league.activeEvent
+    : null;
+  const myEventHistory = myCareer ? myCareer.eventHistory : league.eventHistory;
 
   const myMatchForBans = myWeekMatch || nextUserMatch;
   const nextOppIdx = myMatchForBans
@@ -135,19 +145,19 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
                 </span>
                 <span>
                   Kulüp Kasası:{' '}
-                  <strong className="font-mono-tab text-emerald-300">{league.clubFunds} M€</strong>
+                  <strong className="font-mono-tab text-emerald-300">{myFunds} M€</strong>
                 </span>
                 <span>
-                  Sponsor: <strong className="text-white">{league.sponsorName}</strong>
+                  Sponsor: <strong className="text-white">{mySponsor}</strong>
                 </span>
                 <span>
                   Moral:{' '}
                   <strong
                     className={
-                      league.moraleMod >= 0 ? 'text-emerald-300' : 'text-red-300'
+                      myMorale >= 0 ? 'text-emerald-300' : 'text-red-300'
                     }
                   >
-                    {league.moraleMod >= 0 ? `+${league.moraleMod}%` : `${league.moraleMod}%`}
+                    {myMorale >= 0 ? `+${myMorale}%` : `${myMorale}%`}
                   </strong>
                 </span>
               </div>
@@ -598,12 +608,12 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
 
           <div className="space-y-2.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg">
             <h2 className="text-sm font-bold text-[var(--fg)]">Kulüp Karar Geçmişi</h2>
-            {league.eventHistory.length === 0 ? (
+            {myEventHistory.length === 0 ? (
               <p className="py-4 text-center text-xs text-[var(--muted)]">
                 Henüz kulüp kararı verilmedi.
               </p>
             ) : (
-              league.eventHistory.map((ev, idx) => (
+              myEventHistory.map((ev, idx) => (
                 <div
                   key={`${ev.week}_${idx}`}
                   className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 text-xs"
@@ -619,7 +629,7 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
         </div>
       )}
 
-      {league.activeEvent && (
+      {myActiveEvent && (
         <div
           role="dialog"
           aria-modal="true"
@@ -628,13 +638,13 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
         >
           <div className="w-full max-w-xl rounded-2xl border border-amber-400/50 bg-[var(--surface)] p-5 shadow-2xl">
             <span className="inline-block rounded bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-bold text-amber-300">
-              {league.activeEvent.tag}
+              {myActiveEvent.tag}
             </span>
             <h2 id="career-event-title" className="mt-2 text-lg font-extrabold text-white">
-              {league.activeEvent.title}
+              {myActiveEvent.title}
             </h2>
             <p className="mt-2 text-xs leading-relaxed text-[var(--muted)]">
-              {league.activeEvent.desc}
+              {myActiveEvent.desc}
             </p>
 
             {eventOutcomeText ? (
@@ -655,12 +665,12 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
               </div>
             ) : (
               <div className="mt-4 space-y-2">
-                {league.activeEvent.choices.map((ch, idx) => (
+                {myActiveEvent.choices.map((ch, idx) => (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => {
-                      const out = onResolveEventChoice(ch);
+                      const out = onResolveEventChoice(ch, idx);
                       setEventOutcomeText(out);
                     }}
                     className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-left text-xs font-semibold text-[var(--fg)] transition hover:border-[var(--pri-bright)] hover:bg-[var(--raised)]"
@@ -674,7 +684,7 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
         </div>
       )}
 
-      {!league.activeEvent && league.activeNews && (
+      {!myActiveEvent && league.activeNews && (
         <div
           role="dialog"
           aria-modal="true"

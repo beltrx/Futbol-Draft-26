@@ -50,9 +50,10 @@ export const MatchView: React.FC<MatchViewProps> = ({
   const myInstantReady = isPeerReadyForPhase(net, instantPhase, net.myTeamIdx);
   const myDoneReady = isPeerReadyForPhase(net, donePhase, net.myTeamIdx);
 
+  const currentMatchWeek = match.careerWeek ?? (league ? league.week : 1);
   const nextHumanCareerMatch =
-    isCareer && league && league.week <= league.maxWeeks
-      ? (league.schedule[league.week - 1] || []).find(
+    isCareer && league && currentMatchWeek <= league.maxWeeks
+      ? (league.schedule[currentMatchWeek - 1] || []).find(
           (m) =>
             !m.done &&
             !(m.a === match.a && m.b === match.b) &&

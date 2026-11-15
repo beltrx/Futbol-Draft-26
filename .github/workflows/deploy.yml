@@ -39,10 +39,11 @@ jobs:
           fi
           node -e '
             const fs = require("fs");
+            const v = Date.now();
             let html = fs.readFileSync("index.html", "utf8");
             html = html.replace(
               `<script type="module" src="/src/main.tsx"></script>`,
-              `<link rel="stylesheet" href="./assets/index.css" />\n    <script type="module" src="./assets/app.js"></script>`
+              `<link rel="stylesheet" href="./assets/index.css?v=${v}" />\n    <script type="module" src="./assets/app.js?v=${v}"></script>`
             );
             fs.writeFileSync("_site/index.html", html, "utf8");
           '
