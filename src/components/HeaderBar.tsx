@@ -68,7 +68,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             {net.connected ? `Canlı Oda (${net.roomCode})` : 'Online Oda (2 PC)'}
           </button>
 
-          {draft && draft.k >= draft.order.length && (
+          {!net.connected && draft && draft.k >= draft.order.length && (
             <button
               type="button"
               onClick={() => onNavigate('identity')}
@@ -82,7 +82,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             </button>
           )}
 
-          {draft && (
+          {!net.connected && draft && (
             <button
               type="button"
               onClick={() => onNavigate('result')}
@@ -96,7 +96,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             </button>
           )}
 
-          {draft && isCareer && league && (
+          {!net.connected && draft && isCareer && league && (
             <button
               type="button"
               onClick={() => onNavigate('league_hub')}
@@ -106,7 +106,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             </button>
           )}
 
-          {draft && !isCareer && (
+          {!net.connected && draft && !isCareer && (
             <button
               type="button"
               onClick={onGoMatchDirect}
@@ -116,7 +116,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             </button>
           )}
 
-          {view !== 'setup' && (
+          {!net.connected && view !== 'setup' && (
             <button
               type="button"
               onClick={onResetToSetup}

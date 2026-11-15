@@ -1,6 +1,8 @@
 import React from 'react';
 import { MODES } from '../data/database';
+import { isPeerReadyForPhase } from '../services/onlineNet';
 import type { GameModeId, NetStateSnapshot } from '../types/game';
+import { OnlineReadyBadges } from './ClubBadge';
 
 interface SetupViewProps {
   mode: GameModeId;
@@ -18,7 +20,6 @@ interface SetupViewProps {
   onChangeStrictPos: (strict: boolean) => void;
   onChangeTeamName: (name: string) => void;
   onContinueToClubs: () => void;
-  onOpenOnlineModal: () => void;
 }
 
 export const SetupView: React.FC<SetupViewProps> = ({
@@ -37,11 +38,11 @@ export const SetupView: React.FC<SetupViewProps> = ({
   onChangeStrictPos,
   onChangeTeamName,
   onContinueToClubs,
-  onOpenOnlineModal,
 }) => {
   const activeMode = MODES.find((m) => m.id === mode) || MODES[0];
   const isCareer = !!activeMode.career;
-  const isGuestWaiting = net.role === 'guest';
+  const isGuest = net.role === 'guest';
+  const myReady = isPeerReadyForPhase(net, 'setup', net.myTeamIdx);
 
   return (
     <section aria-label="Oyun Kurulumu" className="space-y-4">
@@ -60,15 +61,14 @@ export const SetupView: React.FC<SetupViewProps> = ({
               oyna.
             </p>
           </div>
-          <div className="flex flex-col items-start gap-2 sm:items-end">
-            <button
-              type="button"
-              onClick={onOpenOnlineModal}
-              className="rounded-xl border border-amber-400/50 bg-amber-900/50 px-4 py-2 text-xs font-bold text-amber-100 transition hover:bg-amber-800/70"
-            >
-              {net.connected ? `Canlı Oda Bağlı (${net.roomCode})` : '2 Kişilik Online Oda Aç / Katıl'}
-            </button>
-          </div>
+          {net.connected && (
+            <div className="flex flex-col items-start gap-1.5 sm:items-end">
+              <span className="rounded-lg border border-emerald-400/50 bg-emerald-950/60 px-3 py-1 text-xs font-bold text-emerald-200">
+                Canlı Oda Aktif ({net.roomCode}) · {net.peerName || '2 Oyuncu'} Bağlı
+              </span>
+              <OnlineReadyBadges net={net} phase="setup" />
+            </div>
+          )}
         </div>
       </div>
 
@@ -77,13 +77,14 @@ export const SetupView: React.FC<SetupViewProps> = ({
           <h2 className="text-base font-bold text-[var(--fg)]">1. Oyun Modunu Seç</h2>
           <span className="text-xs text-[var(--muted)]">
             Seçili Mod: <strong className="text-[var(--pri-bright)]">{activeMode.name}</strong>
+            {isGuest && net.connected ? ' (Oda Kurucu Seçimi)' : ''}
           </span>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {MODES.map((m) => {
             const selected = m.id === mode;
-            const disabledGuest = isGuestWaiting;
+            const disabledGuest = isGuest;
             return (
               <button
                 key={m.id}
@@ -149,7 +150,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
             </label>
             <select
               id="setup-human-count"
-              disabled={net.connected || isGuestWaiting}
+              disabled={net.connected || isGuest}
               value={net.connected ? 2 : humanCount}
               onChange={(e) => onChangeHumanCount(Number(e.target.value))}
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--fg)] disabled:opacity-60"
@@ -165,7 +166,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
             </label>
             <select
               id="setup-opp-count"
-              disabled={isCareer || isGuestWaiting}
+              disabled={isCareer || isGuest}
               value={isCareer ? 1 : opp}
               onChange={(e) => onChangeOpp(Number(e.target.value))}
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--fg)] disabled:opacity-60"
@@ -188,7 +189,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
             </label>
             <select
               id="setup-format"
-              disabled={isGuestWaiting}
+              disabled={isGuest}
               value={format}
               onChange={(e) => onChangeFormat(e.target.value as 'snake' | 'linear')}
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--fg)] disabled:opacity-60"
@@ -204,7 +205,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
             <input
               type="checkbox"
               checked={strictPos}
-              disabled={isGuestWaiting}
+              disabled={isGuest}
               onChange={(e) => onChangeStrictPos(e.target.checked)}
               className="h-4 w-4 accent-[var(--pri-bright)]"
             />
@@ -213,19 +214,26 @@ export const SetupView: React.FC<SetupViewProps> = ({
             </span>
           </label>
 
-          {isGuestWaiting ? (
-            <span className="rounded-lg border border-amber-500/40 bg-amber-950/40 px-3.5 py-2 text-xs font-semibold text-amber-200">
-              Oda Kurucusunun (Host) lig seçip draftı başlatması bekleniyor...
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={onContinueToClubs}
-              className="rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-5 py-2.5 text-sm font-bold text-[var(--pri-fg)] shadow-[0_8px_24px_-6px_rgba(34,197,94,0.6)] transition hover:bg-[#15803d]"
-            >
-              Devam Et: Lig &amp; Takım Seç →
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {net.connected && <OnlineReadyBadges net={net} phase="setup" />}
+            {isGuest && !net.connected ? (
+              <span className="rounded-lg border border-amber-500/40 bg-amber-950/40 px-3.5 py-2 text-xs font-semibold text-amber-200">
+                Oda bağlantısı kuruluyor...
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={onContinueToClubs}
+                className="rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-5 py-2.5 text-sm font-bold text-[var(--pri-fg)] shadow-[0_8px_24px_-6px_rgba(34,197,94,0.6)] transition hover:bg-[#15803d]"
+              >
+                {net.connected
+                  ? myReady
+                    ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
+                    : 'Hazır Ol: Lig & Takım Seç →'
+                  : 'Devam Et: Lig & Takım Seç →'}
+              </button>
+            )}
+          </div>
         </div>
 
         {err && (
@@ -237,3 +245,4 @@ export const SetupView: React.FC<SetupViewProps> = ({
     </section>
   );
 };
+

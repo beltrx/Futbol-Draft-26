@@ -1,11 +1,19 @@
 import React, { useMemo, useState } from 'react';
-import type { CareerEventChoice, LeagueState, LeagueTab, Team } from '../types/game';
+import { isPeerReadyForPhase } from '../services/onlineNet';
+import type {
+  CareerEventChoice,
+  LeagueState,
+  LeagueTab,
+  NetStateSnapshot,
+  Team,
+} from '../types/game';
 import { getSortedStandings, getSuspendedPlayersForTeam } from '../utils/careerLogic';
-import { ClubLogo, MediaLogoBadge, TeamIdentityBadge } from './ClubBadge';
+import { ClubLogo, MediaLogoBadge, OnlineReadyBadges, TeamIdentityBadge } from './ClubBadge';
 
 interface CareerHubViewProps {
   league: LeagueState;
   teams: Team[];
+  net: NetStateSnapshot;
   myTeamIdx?: number;
   onSwitchTab: (tab: LeagueTab) => void;
   onChangeViewWeek: (weekNum: number) => void;
@@ -21,6 +29,7 @@ interface CareerHubViewProps {
 export const CareerHubView: React.FC<CareerHubViewProps> = ({
   league,
   teams,
+  net,
   myTeamIdx = 0,
   onSwitchTab,
   onChangeViewWeek,
@@ -38,25 +47,31 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
   const seasonOver = league.week > league.maxWeeks;
   const currentRoundMatches = !seasonOver ? league.schedule[league.week - 1] || [] : [];
 
+  const humanRoundMatches = currentRoundMatches.filter(
+    (m) => teams[m.a]?.isHuman || teams[m.b]?.isHuman
+  );
+  const myWeekMatch =
+    currentRoundMatches.find((m) => m.a === myTeamIdx || m.b === myTeamIdx) || null;
   const nextUserMatch =
     currentRoundMatches.find((m) => !m.done && (teams[m.a]?.isHuman || teams[m.b]?.isHuman)) ||
-    currentRoundMatches.find((m) => m.a === myTeamIdx || m.b === myTeamIdx) ||
+    myWeekMatch ||
     null;
 
-  const activeUserIdx = nextUserMatch
+  const activeUserIdx = teams[myTeamIdx]?.isHuman
+    ? myTeamIdx
+    : nextUserMatch
     ? teams[nextUserMatch.a]?.isHuman
       ? nextUserMatch.a
       : nextUserMatch.b
-    : teams[myTeamIdx]?.isHuman
-    ? myTeamIdx
     : 0;
   const userRank = standings.findIndex((r) => r.teamIdx === activeUserIdx) + 1;
   const userTeam = teams[activeUserIdx] || teams[0];
 
-  const nextOppIdx = nextUserMatch
-    ? nextUserMatch.a === activeUserIdx
-      ? nextUserMatch.b
-      : nextUserMatch.a
+  const myMatchForBans = myWeekMatch || nextUserMatch;
+  const nextOppIdx = myMatchForBans
+    ? myMatchForBans.a === activeUserIdx
+      ? myMatchForBans.b
+      : myMatchForBans.a
     : null;
   const nextOppTeam = nextOppIdx != null ? teams[nextOppIdx] : undefined;
   const oppSuspendedPlayers = useMemo(
@@ -67,6 +82,9 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
     () => getSuspendedPlayersForTeam(league, userTeam),
     [league, userTeam]
   );
+
+  const weekPhase = `league_hub_w${league.week}`;
+  const myReady = isPeerReadyForPhase(net, weekPhase, net.myTeamIdx);
 
   const viewWeekMatches = league.schedule[league.viewWeek - 1] || [];
 
@@ -144,7 +162,7 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
             >
               Kadro &amp; Taktik
             </button>
-            {!seasonOver && (
+            {!seasonOver && !net.connected && (
               <button
                 type="button"
                 onClick={onSimulateSeason}
@@ -168,7 +186,7 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
                   {championTeam.name} ({championRow.pts} Puan)
                 </div>
                 <div className="text-xs text-amber-100/80">
-                  Senin sıralaman: {userRank}. sıra ({standings.find((r) => r.teamIdx === 0)?.pts ?? 0} puan)
+                  Senin sıralaman: {userRank}. sıra ({standings.find((r) => r.teamIdx === activeUserIdx)?.pts ?? 0} puan)
                 </div>
               </div>
             </div>
@@ -182,20 +200,36 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
           </div>
         ) : nextUserMatch && nextOppTeam ? (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[var(--border)] bg-[#0b1016]/90 p-3.5">
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]">
-                Sıradaki Maç · {league.week}. Hafta ({nextUserMatch.a === activeUserIdx ? 'İç Saha' : 'Deplasman'})
+                {humanRoundMatches.length > 1
+                  ? `Sıradaki Hafta Maçları · ${league.week}. Hafta`
+                  : `Sıradaki Maç · ${league.week}. Hafta (${(myMatchForBans || nextUserMatch).a === activeUserIdx ? 'İç Saha' : 'Deplasman'})`}
               </div>
-              <div className="flex flex-wrap items-center gap-2.5 text-sm font-bold text-[var(--fg)]">
-                <span className="inline-flex items-center gap-1.5">
-                  <TeamIdentityBadge team={teams[nextUserMatch.a]} size={22} />
-                  {teams[nextUserMatch.a].name}
-                </span>
-                <span className="text-xs text-[var(--muted)]">vs</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <TeamIdentityBadge team={teams[nextUserMatch.b]} size={22} />
-                  {teams[nextUserMatch.b].name}
-                </span>
+
+              <div className="space-y-1">
+                {humanRoundMatches.map((hm, idx) => (
+                  <div
+                    key={`${hm.a}_${hm.b}_${idx}`}
+                    className="flex flex-wrap items-center gap-2 text-sm font-bold text-[var(--fg)]"
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <TeamIdentityBadge team={teams[hm.a]} size={20} />
+                      <span className={teams[hm.a]?.isHuman ? 'text-[var(--pri-bright)]' : ''}>
+                        {teams[hm.a].name}
+                      </span>
+                    </span>
+                    <span className="font-mono-tab text-xs text-[var(--muted)]">
+                      {hm.done && hm.sc ? `${hm.sc[0]} - ${hm.sc[1]}` : 'vs'}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <TeamIdentityBadge team={teams[hm.b]} size={20} />
+                      <span className={teams[hm.b]?.isHuman ? 'text-[var(--pri-bright)]' : ''}>
+                        {teams[hm.b].name}
+                      </span>
+                    </span>
+                  </div>
+                ))}
               </div>
 
               {(oppSuspendedPlayers.length > 0 || userSuspendedPlayers.length > 0) && (
@@ -214,13 +248,20 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={onPlayNextMatch}
-              className="rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-5 py-2.5 text-xs font-bold text-white shadow-[0_8px_22px_-6px_rgba(34,197,94,0.65)] transition hover:bg-[#15803d]"
-            >
-              {league.week}. Hafta Maçına Çık →
-            </button>
+            <div className="flex flex-wrap items-center gap-2.5">
+              {net.connected && <OnlineReadyBadges net={net} phase={weekPhase} />}
+              <button
+                type="button"
+                onClick={onPlayNextMatch}
+                className="rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-5 py-2.5 text-xs font-bold text-white shadow-[0_8px_22px_-6px_rgba(34,197,94,0.65)] transition hover:bg-[#15803d]"
+              >
+                {net.connected
+                  ? myReady
+                    ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
+                    : `${league.week}. Hafta İçin Hazır Ol →`
+                  : `${league.week}. Hafta Maçına Çık →`}
+              </button>
+            </div>
           </div>
         ) : null}
       </div>

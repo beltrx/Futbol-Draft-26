@@ -1,6 +1,8 @@
 import React from 'react';
 import { CLUB_CRESTS, CUSTOM_CLUB_LOGOS, MEDIA_LOGOS } from '../data/logos';
-import type { Position, Team } from '../types/game';
+import { isPeerReadyForPhase } from '../services/onlineNet';
+import type { NetStateSnapshot, Position, Team } from '../types/game';
+
 
 interface ClubLogoProps {
   club: string;
@@ -276,3 +278,40 @@ export const PosBadge: React.FC<{ pos: Position }> = ({ pos }) => (
     {POS_LABELS[pos]}
   </span>
 );
+
+export const OnlineReadyBadges: React.FC<{
+  net: NetStateSnapshot;
+  phase: string;
+}> = ({ net, phase }) => {
+  if (!net.connected) return null;
+  const myReady = isPeerReadyForPhase(net, phase, net.myTeamIdx);
+  const oppReady = isPeerReadyForPhase(net, phase, 1 - net.myTeamIdx);
+  const peerLabel = net.peerName || (net.role === 'host' ? '2. Oyuncu' : '1. Oyuncu');
+
+  return (
+    <div
+      data-testid="online-ready-badges"
+      className="inline-flex flex-wrap items-center gap-1.5 text-[11px] font-bold"
+    >
+      <span
+        className={`rounded-lg border px-2.5 py-1 ${
+          myReady
+            ? 'border-emerald-400/60 bg-emerald-950/70 text-emerald-200'
+            : 'border-amber-500/40 bg-amber-950/40 text-amber-200'
+        }`}
+      >
+        Sen: {myReady ? 'Hazır ✓' : 'Hazır Değil'}
+      </span>
+      <span
+        className={`rounded-lg border px-2.5 py-1 ${
+          oppReady
+            ? 'border-emerald-400/60 bg-emerald-950/70 text-emerald-200'
+            : 'border-amber-500/40 bg-amber-950/40 text-amber-200'
+        }`}
+      >
+        {peerLabel}: {oppReady ? 'Hazır ✓' : 'Bekleniyor...'}
+      </span>
+    </div>
+  );
+};
+

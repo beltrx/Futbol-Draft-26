@@ -1198,6 +1198,26 @@
     }
   }
 
+  .border-emerald-400\/50 {
+    border-color: #00d29480;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-emerald-400\/50 {
+      border-color: color-mix(in oklab, var(--color-emerald-400) 50%, transparent);
+    }
+  }
+
+  .border-emerald-400\/60 {
+    border-color: #00d29499;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-emerald-400\/60 {
+      border-color: color-mix(in oklab, var(--color-emerald-400) 60%, transparent);
+    }
+  }
+
   .border-emerald-500\/35 {
     border-color: #00bb7f59;
   }
@@ -1215,6 +1235,16 @@
   @supports (color: color-mix(in lab, red, red)) {
     .border-emerald-500\/40 {
       border-color: color-mix(in oklab, var(--color-emerald-500) 40%, transparent);
+    }
+  }
+
+  .border-emerald-500\/45 {
+    border-color: #00bb7f73;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-emerald-500\/45 {
+      border-color: color-mix(in oklab, var(--color-emerald-500) 45%, transparent);
     }
   }
 
@@ -1606,6 +1636,16 @@
     }
   }
 
+  .bg-emerald-950\/35 {
+    background-color: #002c2259;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-emerald-950\/35 {
+      background-color: color-mix(in oklab, var(--color-emerald-950) 35%, transparent);
+    }
+  }
+
   .bg-emerald-950\/40 {
     background-color: #002c2266;
   }
@@ -1643,6 +1683,16 @@
   @supports (color: color-mix(in lab, red, red)) {
     .bg-emerald-950\/60 {
       background-color: color-mix(in oklab, var(--color-emerald-950) 60%, transparent);
+    }
+  }
+
+  .bg-emerald-950\/70 {
+    background-color: #002c22b3;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-emerald-950\/70 {
+      background-color: color-mix(in oklab, var(--color-emerald-950) 70%, transparent);
     }
   }
 
@@ -2126,6 +2176,16 @@
 
   .text-emerald-100 {
     color: var(--color-emerald-100);
+  }
+
+  .text-emerald-100\/85 {
+    color: #d0fae5d9;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-emerald-100\/85 {
+      color: color-mix(in oklab, var(--color-emerald-100) 85%, transparent);
+    }
   }
 
   .text-emerald-200 {

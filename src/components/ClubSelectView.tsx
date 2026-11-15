@@ -7,15 +7,17 @@ import {
   MODERN_LEAGUES,
   PLAYERS_POOL,
 } from '../data/database';
-import type { GameModeId } from '../types/game';
+import { isPeerReadyForPhase } from '../services/onlineNet';
+import type { GameModeId, NetStateSnapshot } from '../types/game';
 import { getModeDef } from '../utils/draftLogic';
-import { ClubLogo } from './ClubBadge';
+import { ClubLogo, OnlineReadyBadges } from './ClubBadge';
 
 interface ClubSelectViewProps {
   mode: GameModeId;
   leagues: Set<string>;
   clubs: Set<string>;
   err: string;
+  net: NetStateSnapshot;
   onToggleLeague: (lgId: string) => void;
   onToggleClub: (club: string) => void;
   onSelectPreset: (preset: 'all' | 'pl' | 'superlig' | 'iconic' | 'clear') => void;
@@ -28,6 +30,7 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
   leagues,
   clubs,
   err,
+  net,
   onToggleLeague,
   onToggleClub,
   onSelectPreset,
@@ -36,6 +39,8 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
 }) => {
   const modeDef = getModeDef(mode);
   const isIconicMode = mode === 'iconic';
+  const isGuest = net.connected && net.role === 'guest';
+  const myReady = isPeerReadyForPhase(net, 'clubs', net.myTeamIdx);
 
   const visibleModernClubs = useMemo(() => {
     return ALL_CLUBS.filter((c) => {
@@ -79,23 +84,30 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {net.connected && <OnlineReadyBadges net={net} phase="clubs" />}
           <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-xs">
             Havuzdaki Oyuncu:{' '}
             <strong className="font-mono-tab text-[var(--pri-bright)]">{poolCount}</strong>
           </div>
-          <button
-            type="button"
-            onClick={onBack}
-            className="rounded-lg border border-[var(--border)] bg-[var(--raised)] px-3.5 py-2 text-xs font-semibold hover:bg-[var(--accent)]"
-          >
-            ← Mod Seçimine Dön
-          </button>
+          {!net.connected && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="rounded-lg border border-[var(--border)] bg-[var(--raised)] px-3.5 py-2 text-xs font-semibold hover:bg-[var(--accent)]"
+            >
+              ← Mod Seçimine Dön
+            </button>
+          )}
           <button
             type="button"
             onClick={onStartDraft}
             className="rounded-lg border border-[var(--pri-bright)] bg-[var(--pri)] px-4 py-2 text-xs font-bold text-white shadow-[0_6px_18px_-6px_rgba(34,197,94,0.65)] hover:bg-[#15803d]"
           >
-            Draftı Başlat →
+            {net.connected
+              ? myReady
+                ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
+                : 'Hazır Ol & Draftı Başlat →'
+              : 'Draftı Başlat →'}
           </button>
         </div>
       </div>
@@ -108,50 +120,54 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
 
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-bold text-[var(--fg)]">Ligler</h2>
-          <div className="flex flex-wrap gap-1.5">
-            {!isIconicMode && (
-              <>
+          <h2 className="text-sm font-bold text-[var(--fg)]">
+            Ligler {isGuest ? '(Oda Kurucu Seçiyor)' : ''}
+          </h2>
+          {!isGuest && (
+            <div className="flex flex-wrap gap-1.5">
+              {!isIconicMode && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onSelectPreset('all')}
+                    className="rounded border border-[var(--border)] bg-[var(--raised)] px-2.5 py-1 text-xs font-semibold hover:bg-[var(--accent)]"
+                  >
+                    Tüm Ligler
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectPreset('pl')}
+                    className="rounded border border-[var(--border)] bg-[var(--raised)] px-2.5 py-1 text-xs font-semibold hover:bg-[var(--accent)]"
+                  >
+                    Premier Lig
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectPreset('superlig')}
+                    className="rounded border border-[var(--border)] bg-[var(--raised)] px-2.5 py-1 text-xs font-semibold hover:bg-[var(--accent)]"
+                  >
+                    Süper Lig
+                  </button>
+                </>
+              )}
+              {mode !== 'career' && (
                 <button
                   type="button"
-                  onClick={() => onSelectPreset('all')}
-                  className="rounded border border-[var(--border)] bg-[var(--raised)] px-2.5 py-1 text-xs font-semibold hover:bg-[var(--accent)]"
+                  onClick={() => onSelectPreset('iconic')}
+                  className="rounded border border-amber-400/50 bg-amber-900/40 px-2.5 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-800/60"
                 >
-                  Tüm Ligler
+                  İkonik Efsaneler (18)
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onSelectPreset('pl')}
-                  className="rounded border border-[var(--border)] bg-[var(--raised)] px-2.5 py-1 text-xs font-semibold hover:bg-[var(--accent)]"
-                >
-                  Premier Lig
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onSelectPreset('superlig')}
-                  className="rounded border border-[var(--border)] bg-[var(--raised)] px-2.5 py-1 text-xs font-semibold hover:bg-[var(--accent)]"
-                >
-                  Süper Lig
-                </button>
-              </>
-            )}
-            {mode !== 'career' && (
+              )}
               <button
                 type="button"
-                onClick={() => onSelectPreset('iconic')}
-                className="rounded border border-amber-400/50 bg-amber-900/40 px-2.5 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-800/60"
+                onClick={() => onSelectPreset('clear')}
+                className="rounded border border-[var(--border)] bg-[var(--card)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)] hover:text-white"
               >
-                İkonik Efsaneler (18)
+                Seçimi Temizle
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => onSelectPreset('clear')}
-              className="rounded border border-[var(--border)] bg-[var(--card)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)] hover:text-white"
-            >
-              Seçimi Temizle
-            </button>
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-5">
@@ -165,6 +181,7 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
                 <button
                   key={lg.id}
                   type="button"
+                  disabled={isGuest}
                   aria-pressed={active}
                   onClick={() => onToggleLeague(lg.id)}
                   className={`flex flex-col rounded-xl border p-3 text-left transition ${
@@ -210,6 +227,7 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
                 <button
                   key={club}
                   type="button"
+                  disabled={isGuest}
                   aria-pressed={picked}
                   onClick={() => onToggleClub(club)}
                   className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
@@ -240,6 +258,7 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
                 <button
                   key={club}
                   type="button"
+                  disabled={isGuest}
                   aria-pressed={picked}
                   onClick={() => onToggleClub(club)}
                   className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${

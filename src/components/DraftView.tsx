@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FORMATION_QUOTA, POSITIONS, ROUNDS } from '../data/database';
+import { isPeerReadyForPhase } from '../services/onlineNet';
 import type { DraftState, NetStateSnapshot, Player, Position, WheelState } from '../types/game';
 import {
   canPickPlayer,
@@ -9,7 +10,7 @@ import {
   getWheelClubsForTurn,
   posCountsOf,
 } from '../utils/draftLogic';
-import { ClubLogo, PosBadge, TeamIdentityBadge } from './ClubBadge';
+import { ClubLogo, OnlineReadyBadges, PosBadge, TeamIdentityBadge } from './ClubBadge';
 
 interface DraftViewProps {
   draft: DraftState;
@@ -59,6 +60,7 @@ export const DraftView: React.FC<DraftViewProps> = ({
   const roundNum = Math.min(ROUNDS, Math.floor(draft.k / draft.teams.length) + 1);
   const isMyTurn = !done && activeTeam?.isHuman && (!net.connected || activeTeamIdx === net.myTeamIdx);
   const isWheelMode = draft.m.id === 'wheel';
+  const myAutoReady = isPeerReadyForPhase(net, 'draft_auto', net.myTeamIdx);
 
   const wheelClubs = useMemo(() => {
     if (!isWheelMode || done || !activeTeam) return [];
@@ -162,13 +164,20 @@ export const DraftView: React.FC<DraftViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {!done && (!net.connected || net.role === 'host') && (
+          {!done && net.connected && net.readyPhase === 'draft_auto' && (
+            <OnlineReadyBadges net={net} phase="draft_auto" />
+          )}
+          {!done && (
             <button
               type="button"
               onClick={onAutoComplete}
               className="rounded-lg border border-amber-400/50 bg-amber-900/50 px-3.5 py-2 text-xs font-bold text-amber-100 hover:bg-amber-800/70"
             >
-              Hızlı Tamamla (Otomatik)
+              {net.connected
+                ? myAutoReady
+                  ? 'Hızlı Tamamla: Hazır ✓ (Rakip Bekleniyor...)'
+                  : 'Hızlı Tamamla İçin Hazır Ol'
+                : 'Hızlı Tamamla (Otomatik)'}
             </button>
           )}
           {!net.connected && draft.history.length > 0 && !done && (
@@ -189,13 +198,15 @@ export const DraftView: React.FC<DraftViewProps> = ({
               Takım Kimliği &amp; Logo Adımına Geç →
             </button>
           )}
-          <button
-            type="button"
-            onClick={onResetToSetup}
-            className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-xs font-semibold text-[var(--muted)] hover:text-white"
-          >
-            Çık
-          </button>
+          {!net.connected && (
+            <button
+              type="button"
+              onClick={onResetToSetup}
+              className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-xs font-semibold text-[var(--muted)] hover:text-white"
+            >
+              Çık
+            </button>
+          )}
         </div>
       </div>
 

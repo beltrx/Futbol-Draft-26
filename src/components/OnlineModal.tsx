@@ -86,92 +86,115 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-            <h3 className="mb-1 text-sm font-bold text-[var(--fg)]">1. Oda Kur (Host)</h3>
-            <p className="mb-3 text-xs text-[var(--muted)]">
-              Kısa 5 haneli Oda Kodu oluştur ve linki arkadaşına gönder.
-            </p>
-            <button
-              type="button"
-              onClick={onCreateRoom}
-              className="rounded-lg border border-[var(--pri-bright)] bg-[var(--pri)] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#15803d]"
-            >
-              Yeni Online Oda Kur
-            </button>
-
-            {net.role === 'host' && net.roomCode && (
-              <div className="mt-3 space-y-2 border-t border-[var(--border)] pt-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs text-[var(--muted)]">Oda Kodu:</span>
-                  <strong className="font-mono-tab text-base text-[var(--pri-bright)]">
-                    {net.roomCode}
-                  </strong>
-                  <button
-                    type="button"
-                    onClick={handleCopyCode}
-                    className="rounded border border-[var(--border)] bg-[var(--raised)] px-2.5 py-1 text-xs font-semibold hover:bg-[var(--accent)]"
-                  >
-                    Kodu Kopyala
-                  </button>
+        {net.connected ? (
+          <div className="rounded-xl border border-emerald-500/45 bg-emerald-950/35 p-4 text-xs text-emerald-100">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-extrabold text-emerald-300">
+                  ✓ Canlı Oda Bağlantısı Kuruldu (Oda Kodu: {net.roomCode})
                 </div>
-
-                {inviteUrl && (
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="invite-url-readonly" className="text-[11px] text-[var(--muted)]">
-                      Arkadaşına göndereceğin Davet Linki:
-                    </label>
-                    <input
-                      id="invite-url-readonly"
-                      type="text"
-                      readOnly
-                      value={inviteUrl}
-                      onFocus={(e) => e.currentTarget.select()}
-                      className="w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 font-mono text-[11px] text-[var(--fg)]"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleCopyLink}
-                      className="self-start rounded border border-[var(--pri-bright)] bg-[var(--pri)] px-3 py-1 text-xs font-semibold text-white hover:bg-[#15803d]"
-                    >
-                      Davet Linkini Kopyala
-                    </button>
-                  </div>
-                )}
+                <p className="mt-1 text-emerald-100/85">
+                  {net.peerName || 'Arkadaşın'} ile canlı bağlısınız. Tüm adımlarda iki oyuncu da{' '}
+                  <strong>Hazır Ol</strong> butonuna bastığında ekranlarınız ortak ilerler.
+                </p>
               </div>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-            <h3 className="mb-1 text-sm font-bold text-[var(--fg)]">2. Odaya Katıl (Misafir)</h3>
-            <p className="mb-3 text-xs text-[var(--muted)]">
-              Arkadaşının paylaştığı 5 haneli Oda Kodunu buraya gir:
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <label htmlFor="friend-code-inp" className="sr-only">
-                5 haneli Oda Kodu
-              </label>
-              <input
-                id="friend-code-inp"
-                type="text"
-                value={joinCodeInput}
-                onChange={(e) => setJoinCodeInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') onJoinRoom(joinCodeInput);
-                }}
-                placeholder="Örn: 48291"
-                className="w-36 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 font-mono text-sm text-[var(--fg)] focus:border-[var(--pri-bright)] focus:outline-none"
-              />
               <button
                 type="button"
-                onClick={() => onJoinRoom(joinCodeInput)}
-                className="rounded-lg border border-amber-400/60 bg-amber-900/70 px-3.5 py-1.5 text-xs font-bold text-amber-100 hover:bg-amber-800/80"
+                onClick={onClose}
+                className="rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-[#15803d]"
               >
-                Odaya Bağlan
+                Oyuna Dön →
               </button>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+              <h3 className="mb-1 text-sm font-bold text-[var(--fg)]">1. Oda Kur (Host)</h3>
+              <p className="mb-3 text-xs text-[var(--muted)]">
+                Kısa 5 haneli Oda Kodu oluştur ve linki arkadaşına gönder.
+              </p>
+              <button
+                type="button"
+                onClick={onCreateRoom}
+                className="rounded-lg border border-[var(--pri-bright)] bg-[var(--pri)] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#15803d]"
+              >
+                Yeni Online Oda Kur
+              </button>
+
+              {net.role === 'host' && net.roomCode && (
+                <div className="mt-3 space-y-2 border-t border-[var(--border)] pt-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs text-[var(--muted)]">Oda Kodu:</span>
+                    <strong className="font-mono-tab text-base text-[var(--pri-bright)]">
+                      {net.roomCode}
+                    </strong>
+                    <button
+                      type="button"
+                      onClick={handleCopyCode}
+                      className="rounded border border-[var(--border)] bg-[var(--raised)] px-2.5 py-1 text-xs font-semibold hover:bg-[var(--accent)]"
+                    >
+                      Kodu Kopyala
+                    </button>
+                  </div>
+
+                  {inviteUrl && (
+                    <div className="flex flex-col gap-1.5">
+                      <label htmlFor="invite-url-readonly" className="text-[11px] text-[var(--muted)]">
+                        Arkadaşına göndereceğin Davet Linki:
+                      </label>
+                      <input
+                        id="invite-url-readonly"
+                        type="text"
+                        readOnly
+                        value={inviteUrl}
+                        onFocus={(e) => e.currentTarget.select()}
+                        className="w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 font-mono text-[11px] text-[var(--fg)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCopyLink}
+                        className="self-start rounded border border-[var(--pri-bright)] bg-[var(--pri)] px-3 py-1 text-xs font-semibold text-white hover:bg-[#15803d]"
+                      >
+                        Davet Linkini Kopyala
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+              <h3 className="mb-1 text-sm font-bold text-[var(--fg)]">2. Odaya Katıl (Misafir)</h3>
+              <p className="mb-3 text-xs text-[var(--muted)]">
+                Arkadaşının paylaştığı 5 haneli Oda Kodunu buraya gir:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <label htmlFor="friend-code-inp" className="sr-only">
+                  5 haneli Oda Kodu
+                </label>
+                <input
+                  id="friend-code-inp"
+                  type="text"
+                  value={joinCodeInput}
+                  onChange={(e) => setJoinCodeInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') onJoinRoom(joinCodeInput);
+                  }}
+                  placeholder="Örn: 48291"
+                  className="w-36 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 font-mono text-sm text-[var(--fg)] focus:border-[var(--pri-bright)] focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => onJoinRoom(joinCodeInput)}
+                  className="rounded-lg border border-amber-400/60 bg-amber-900/70 px-3.5 py-1.5 text-xs font-bold text-amber-100 hover:bg-amber-800/80"
+                >
+                  Odaya Bağlan
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {onlineMsg && (
           <div className="mt-3 rounded-lg border border-emerald-500/35 bg-emerald-950/30 px-3.5 py-2.5 text-xs text-emerald-200">

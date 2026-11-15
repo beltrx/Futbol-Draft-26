@@ -319,6 +319,8 @@ export interface NetStateSnapshot {
   statusText: string;
   myTeamIdx: number;
   peerName: string;
+  readyPhase?: string;
   readyMap: Record<number, boolean>;
   chatLog: { sender: string; text: string }[];
 }
+

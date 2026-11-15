@@ -207,12 +207,69 @@ export default function App() {
       if (!nextDraft.m.career) {
         setTournament(initTournamentState(nextDraft.teams));
       }
+      onlineNet.resetReady();
       setDraft(nextDraft);
       setView('identity');
     } else {
       setDraft(nextDraft);
     }
   }, []);
+
+  const markReadyForPhase = useCallback((phase: string) => {
+    const { net: curNet } = stateRef.current;
+    if (!curNet.connected) return;
+    onlineNet.setPhaseReady(phase, curNet.myTeamIdx, true);
+    onlineNet.send({
+      type: 'READY_SYNC',
+      phase,
+      teamIdx: curNet.myTeamIdx,
+      ready: true,
+    });
+  }, []);
+
+  const syncTeamLineupToPeer = useCallback(
+    (teamIdx: number, tm: NonNullable<DraftState['teams'][number]>, ready = false) => {
+      const { net: curNet } = stateRef.current;
+      if (!curNet.connected) return;
+      ensureTeamLineup(tm, stateRef.current.league, !!stateRef.current.draft?.m.career);
+      onlineNet.send({
+        type: 'LINEUP_SYNC',
+        teamIdx,
+        name: tm.name,
+        customIdentity: tm.customIdentity,
+        formation: tm.formation,
+        starterIds: (tm.starters || []).map((p) => p.id),
+        benchIds: (tm.bench || []).map((p) => p.id),
+        ready,
+      });
+    },
+    []
+  );
+
+  const broadcastSetupSync = useCallback(
+    (patch?: {
+      mode?: GameModeId;
+      leagues?: Set<string>;
+      clubs?: Set<string>;
+      opp?: number;
+      format?: 'snake' | 'linear';
+      strictPos?: boolean;
+    }) => {
+      const st = stateRef.current;
+      if (!st.net.connected || st.net.role !== 'host') return;
+      onlineNet.resetReady();
+      onlineNet.send({
+        type: 'SETUP_SYNC',
+        mode: patch?.mode ?? st.mode,
+        leagues: [...(patch?.leagues ?? st.leagues)],
+        clubs: [...(patch?.clubs ?? st.clubs)],
+        opp: patch?.opp ?? st.opp,
+        format: patch?.format ?? st.format,
+        strictPos: patch?.strictPos ?? st.strictPos,
+      });
+    },
+    []
+  );
 
   const setupMatch = useCallback(
     (a: number, b: number, tourneyMatchId: string | null = null) => {
@@ -234,6 +291,7 @@ export default function App() {
         isCareer
       );
 
+      onlineNet.resetReady();
       setDraft(cloned);
       setMatch(mState);
       setView('match');
@@ -294,32 +352,40 @@ export default function App() {
     finalizeMatchState(mNext, draftClone.teams, tourneyClone, isCareer);
 
     if (isCareer && curLeague && !mNext.leagueWeekRecorded) {
-      const lgClone = cloneLeague(curLeague);
-      finalizeCareerWeekAfterUserMatch(
-        lgClone,
-        draftClone.teams,
-        { a: mNext.a, b: mNext.b },
-        mNext.sc[0],
-        mNext.sc[1],
-        mNext.goalsList[0],
-        mNext.goalsList[1],
-        mNext.playerStats
-      );
       mNext.leagueWeekRecorded = true;
-      setLeague(lgClone);
-      if (curNet.connected && curNet.role === 'host') {
-        onlineNet.send({
-          type: 'CAREER_SYNC',
-          teams: draftClone.teams,
-          league: {
-            ...lgClone,
-            usedEventIds: [...lgClone.usedEventIds],
-            usedNewsIds: [...lgClone.usedNewsIds],
-          },
-        });
+      if (!curNet.connected || curNet.role === 'host') {
+        const lgClone = cloneLeague(curLeague);
+        finalizeCareerWeekAfterUserMatch(
+          lgClone,
+          draftClone.teams,
+          { a: mNext.a, b: mNext.b },
+          mNext.sc[0],
+          mNext.sc[1],
+          mNext.goalsList[0],
+          mNext.goalsList[1],
+          mNext.playerStats
+        );
+        setLeague(lgClone);
+        if (curNet.connected && curNet.role === 'host') {
+          onlineNet.send({
+            type: 'CAREER_SYNC',
+            teams: draftClone.teams,
+            league: {
+              ...lgClone,
+              usedEventIds: [...lgClone.usedEventIds],
+              usedNewsIds: [...lgClone.usedNewsIds],
+            },
+          });
+        }
       }
+    } else if (!isCareer && tourneyClone && curNet.connected && curNet.role === 'host') {
+      onlineNet.send({
+        type: 'TOURNEY_SYNC',
+        tournament: tourneyClone,
+      });
     }
 
+    onlineNet.resetReady();
     setDraft(draftClone);
     if (tourneyClone) setTournament(tourneyClone);
     setMatch(mNext);
@@ -329,32 +395,279 @@ export default function App() {
     }
   }, []);
 
+  const executeStartDraft = useCallback(() => {
+    const st = stateRef.current;
+    setSetupErr('');
+    const res = buildDraftState({
+      mode: st.mode,
+      leagues: st.leagues,
+      clubs: st.clubs,
+      opp: st.opp,
+      humanCount: st.net.connected ? 2 : st.humanCount,
+      format: st.format,
+      strictPos: st.strictPos,
+      netConnected: st.net.connected,
+      myTeamIdx: st.net.myTeamIdx,
+    });
+    if (!res.state) {
+      setSetupErr(res.error);
+      if (st.net.connected && st.net.role === 'host') {
+        onlineNet.send({ type: 'SETUP_ERR', error: res.error });
+      }
+      return;
+    }
+
+    const d = res.state;
+    if (st.net.connected) {
+      d.teams[0].name =
+        st.net.role === 'host'
+          ? st.teamName || '1. Oyuncu'
+          : st.net.peerName || '1. Oyuncu';
+      d.teams[1].name =
+        st.net.role === 'guest'
+          ? st.teamName || '2. Oyuncu'
+          : st.net.peerName || '2. Oyuncu';
+      onlineNet.resetReady();
+      if (st.net.role === 'host') {
+        onlineNet.send({
+          type: 'START_DRAFT',
+          mode: st.mode,
+          leagues: [...res.effectiveLeagues],
+          clubs: [...st.clubs],
+          opp: st.opp,
+          format: st.format,
+          strictPos: st.strictPos,
+          teamNames: d.teams.map((t) => t.name),
+          order: d.order,
+        });
+      }
+    } else if (st.teamName.trim()) {
+      d.teams[0].name = st.teamName.trim();
+    }
+
+    setLeagues(res.effectiveLeagues);
+    setDraft(d);
+    setTournament(null);
+    setLeague(null);
+    setMatch(null);
+    setWheel({ spinning: false, angle: 0, selectedClub: null, offeredPlayers: [], jokers: 3 });
+    setView('draft');
+  }, []);
+
+  const executeAutoCompleteDraft = useCallback(() => {
+    const { draft: curDraft, strictPos: curStrict, net: curNet } = stateRef.current;
+    if (!curDraft) return;
+    const next = cloneDraftState(curDraft);
+    while (next.k < next.order.length) {
+      const ti = next.order[next.k];
+      const tm = next.teams[ti];
+      const chosen = chooseCpuPlayer(next, tm, curStrict);
+      if (!chosen) {
+        const fallback = next.pool.find((p) => !next.taken.has(p.id));
+        if (!fallback) break;
+        tm.picks.push(fallback);
+        tm.spent += cost(fallback);
+        siblingIds(next, fallback).forEach((id) => next.taken.add(id));
+        next.k++;
+        continue;
+      }
+      tm.picks.push(chosen);
+      tm.spent += cost(chosen);
+      siblingIds(next, chosen).forEach((id) => next.taken.add(id));
+      next.k++;
+    }
+    next.teams.forEach((tm) => ensureTeamLineup(tm, null, false));
+    onlineNet.resetReady();
+    setDraft(next);
+    if (!next.m.career) {
+      setTournament(initTournamentState(next.teams));
+    }
+    setView('identity');
+
+    if (curNet.connected && curNet.role === 'host') {
+      onlineNet.send({
+        type: 'AUTO_COMPLETE_SYNC',
+        picksByTeam: next.teams.map((t) => t.picks.map((p) => p.id)),
+      });
+    }
+  }, []);
+
+  const executeInitPremierLeague = useCallback(() => {
+    const { draft: curDraft, net: curNet } = stateRef.current;
+    if (!curDraft) return;
+    if (curNet.connected && curNet.role === 'guest') return;
+    const { teams: allTeams, league: lg } = initCareerLeague(
+      curDraft.teams,
+      curDraft.m.budget
+    );
+    const nextDraft = cloneDraftState(curDraft);
+    nextDraft.teams = allTeams;
+    onlineNet.resetReady();
+    setDraft(nextDraft);
+    setLeague(lg);
+    setView('league_hub');
+    if (curNet.connected && curNet.role === 'host') {
+      onlineNet.send({
+        type: 'CAREER_INIT',
+        teams: allTeams,
+        league: {
+          ...lg,
+          usedEventIds: [...lg.usedEventIds],
+          usedNewsIds: [...lg.usedNewsIds],
+        },
+      });
+    }
+  }, []);
+
+  const executePlayCareerMatch = useCallback(() => {
+    const { draft: curDraft, league: curLeague } = stateRef.current;
+    if (!curDraft || !curLeague || curLeague.week > curLeague.maxWeeks) return;
+    const roundMatches = curLeague.schedule[curLeague.week - 1] || [];
+    const userMatch = roundMatches.find(
+      (m) => !m.done && (curDraft.teams[m.a]?.isHuman || curDraft.teams[m.b]?.isHuman)
+    );
+    if (!userMatch) return;
+    setupMatch(userMatch.a, userMatch.b, null);
+  }, [setupMatch]);
+
+  const executeAfterMatchProceed = useCallback(() => {
+    const {
+      draft: curDraft,
+      league: curLeague,
+      tournament: curTourney,
+      match: curMatch,
+      net: curNet,
+    } = stateRef.current;
+    if (!curDraft) return;
+
+    if (curDraft.m.career && curLeague) {
+      const roundMatches =
+        curLeague.week <= curLeague.maxWeeks
+          ? curLeague.schedule[curLeague.week - 1] || []
+          : [];
+      const nextHumanMatch = roundMatches.find(
+        (m) =>
+          !m.done &&
+          !(curMatch && m.a === curMatch.a && m.b === curMatch.b) &&
+          (curDraft.teams[m.a]?.isHuman || curDraft.teams[m.b]?.isHuman)
+      );
+      if (nextHumanMatch) {
+        setupMatch(nextHumanMatch.a, nextHumanMatch.b, null);
+        return;
+      }
+      onlineNet.resetReady();
+      setView('league_hub');
+      if (curNet.connected && curNet.role === 'host') {
+        onlineNet.send({ type: 'PHASE_ADVANCE', to: 'league_hub' });
+      }
+      return;
+    }
+
+    const actMatch = getActiveTournamentMatch(curTourney);
+    if (actMatch && !actMatch.done && actMatch.a != null && actMatch.b != null) {
+      setupMatch(actMatch.a, actMatch.b, actMatch.id);
+      return;
+    }
+
+    onlineNet.resetReady();
+    setView('result');
+    if (curNet.connected && curNet.role === 'host') {
+      onlineNet.send({ type: 'PHASE_ADVANCE', to: 'result' });
+    }
+  }, [setupMatch]);
+
+  // Host Lockstep Coordinator: whenever BOTH players mark Ready for the active phase, advance both players together!
+  useEffect(() => {
+    if (!net.connected || net.role !== 'host') return;
+    const phase = net.readyPhase || '';
+    if (!phase || !net.readyMap[0] || !net.readyMap[1]) return;
+
+    onlineNet.resetReady();
+
+    if (phase === 'setup') {
+      setSetupErr('');
+      setView('clubs');
+      onlineNet.send({ type: 'PHASE_ADVANCE', to: 'clubs' });
+    } else if (phase === 'clubs') {
+      executeStartDraft();
+    } else if (phase === 'draft_auto') {
+      executeAutoCompleteDraft();
+    } else if (phase === 'identity') {
+      setSwapErr('');
+      setView('result');
+      onlineNet.send({ type: 'PHASE_ADVANCE', to: 'result' });
+    } else if (phase === 'lineup' || phase === 'league_select') {
+      const curDraft = stateRef.current.draft;
+      if (!curDraft) return;
+      if (curDraft.m.career) {
+        executeInitPremierLeague();
+      } else {
+        const nextTourney =
+          stateRef.current.tournament || initTournamentState(curDraft.teams);
+        if (!stateRef.current.tournament) setTournament(nextTourney);
+        onlineNet.send({ type: 'TOURNEY_SYNC', tournament: nextTourney });
+        const actMatch = getActiveTournamentMatch(nextTourney);
+        if (actMatch && actMatch.a != null && actMatch.b != null) {
+          setupMatch(actMatch.a, actMatch.b, actMatch.id);
+        } else {
+          setupMatch(0, 1);
+        }
+      }
+    } else if (phase.startsWith('league_hub_w')) {
+      executePlayCareerMatch();
+    } else if (phase.startsWith('match_kickoff_')) {
+      setMatch((prev) => (prev ? { ...prev, run: 1 } : prev));
+      onlineNet.send({ type: 'MATCH_CTRL', action: 'start' });
+    } else if (phase.startsWith('match_instant_')) {
+      handleFinishInstantly(false);
+    } else if (phase.startsWith('match_done_')) {
+      executeAfterMatchProceed();
+    }
+  }, [
+    net.connected,
+    net.role,
+    net.readyPhase,
+    net.readyMap,
+    executeStartDraft,
+    executeAutoCompleteDraft,
+    executeInitPremierLeague,
+    executePlayCareerMatch,
+    executeAfterMatchProceed,
+    handleFinishInstantly,
+    setupMatch,
+  ]);
+
   // Online message listener
   useEffect(() => {
     const unsub = onlineNet.subscribeMessages((msg: NetEnvelope) => {
       const st = stateRef.current;
 
-      if (msg.type === 'HELLO' && st.net.role === 'host') {
-        const peerName = (msg.name as string) || 'Arkadaşın';
+      if ((msg.type === 'HELLO' || msg.type === 'HELLO_ACK') && st.net.role === 'host') {
+        const peerName = (msg.name as string) || st.net.peerName || '2. Oyuncu';
         onlineNet.updateSnapshot({
           connected: true,
           peerName,
           statusText: `${peerName} ile Canlı Bağlı (Oda: ${st.net.roomCode})`,
         });
-        setOnlineMsg(`${peerName} odaya bağlandı! Lig ve takım seçip draftı başlatabilirsin.`);
-        onlineNet.send(
-          {
-            type: 'WELCOME',
-            hostName: st.teamName || '1. Oyuncu (Host)',
-            mode: st.mode,
-            leagues: [...st.leagues],
-            clubs: [...st.clubs],
-            opp: st.opp,
-            format: st.format,
-            strictPos: st.strictPos,
-          },
-          true
-        );
+        setHumanCount(2);
+        setOnlineModalOpen(false);
+        setOnlineMsg(`${peerName} odaya bağlandı! Her adımda iki oyuncu da Hazır Ol diyerek ortak ilerleyecek.`);
+        if (msg.type === 'HELLO') {
+          onlineNet.send(
+            {
+              type: 'WELCOME',
+              hostName: st.teamName || '1. Oyuncu (Host)',
+              mode: st.mode,
+              leagues: [...st.leagues],
+              clubs: [...st.clubs],
+              opp: st.opp,
+              format: st.format,
+              strictPos: st.strictPos,
+              view: st.view === 'clubs' ? 'clubs' : 'setup',
+            },
+            true
+          );
+        }
       } else if (msg.type === 'WELCOME' && st.net.role === 'guest') {
         const hostName = (msg.hostName as string) || 'Oda Kurucu';
         onlineNet.updateSnapshot({
@@ -368,7 +681,46 @@ export default function App() {
         if (msg.opp != null) setOpp(Number(msg.opp));
         if (msg.format) setFormat(msg.format as 'snake' | 'linear');
         if (msg.strictPos != null) setStrictPos(Boolean(msg.strictPos));
-        setOnlineMsg(`${hostName} odasına canlı bağlandın! Oda kurucunun draftı başlatması bekleniyor.`);
+        if (msg.view === 'clubs' || msg.view === 'setup') {
+          setView(msg.view as AppView);
+        }
+        setHumanCount(2);
+        setOnlineModalOpen(false);
+        setOnlineMsg(`${hostName} odasına canlı bağlandın! Hazır Ol butonuna basarak ortak ilerleyebilirsiniz.`);
+        onlineNet.send(
+          {
+            type: 'HELLO_ACK',
+            name:
+              !st.teamName || st.teamName === '1. Oyuncu'
+                ? '2. Oyuncu (Misafir)'
+                : st.teamName,
+          },
+          true
+        );
+      } else if (msg.type === 'SETUP_SYNC' && st.net.role === 'guest') {
+        onlineNet.resetReady();
+        if (msg.mode) setMode(msg.mode as GameModeId);
+        if (Array.isArray(msg.leagues)) setLeagues(new Set(msg.leagues as string[]));
+        if (Array.isArray(msg.clubs)) setClubs(new Set(msg.clubs as string[]));
+        if (msg.opp != null) setOpp(Number(msg.opp));
+        if (msg.format) setFormat(msg.format as 'snake' | 'linear');
+        if (msg.strictPos != null) setStrictPos(Boolean(msg.strictPos));
+      } else if (msg.type === 'SETUP_ERR') {
+        setSetupErr(String(msg.error || ''));
+        onlineNet.resetReady();
+      } else if (msg.type === 'READY_SYNC') {
+        const phase = String(msg.phase || '');
+        const ti = Number(msg.teamIdx);
+        const rdy = Boolean(msg.ready);
+        onlineNet.setPhaseReady(phase, ti, rdy);
+      } else if (msg.type === 'PHASE_ADVANCE') {
+        const nextView = msg.to as AppView;
+        if (nextView) {
+          onlineNet.resetReady();
+          setSetupErr('');
+          setSwapErr('');
+          setView(nextView);
+        }
       } else if (msg.type === 'START_DRAFT') {
         const nextMode = (msg.mode as GameModeId) || st.mode;
         const nextLeagues = new Set((msg.leagues as string[]) || []);
@@ -433,11 +785,16 @@ export default function App() {
           });
           next.k = next.order.length;
           next.teams.forEach((tm) => ensureTeamLineup(tm));
+          onlineNet.resetReady();
           setDraft(next);
           if (!next.m.career) {
             setTournament(initTournamentState(next.teams));
           }
           setView('identity');
+        }
+      } else if (msg.type === 'TOURNEY_SYNC') {
+        if (msg.tournament) {
+          setTournament(msg.tournament as TournamentState);
         }
       } else if (msg.type === 'CAREER_INIT' || msg.type === 'CAREER_SYNC') {
         if (st.draft && msg.league && Array.isArray(msg.teams)) {
@@ -455,6 +812,7 @@ export default function App() {
           setDraft(nextDraft);
           setLeague(hydratedLg);
           if (msg.type === 'CAREER_INIT') {
+            onlineNet.resetReady();
             setView('league_hub');
           }
         }
@@ -490,7 +848,9 @@ export default function App() {
               .map((id) => PLAYERS_BY_ID[id])
               .filter(Boolean);
             setDraft(next);
-            onlineNet.setReady(ti, Boolean(msg.ready));
+            if (msg.ready) {
+              onlineNet.setPhaseReady('lineup', ti, true);
+            }
           }
         }
       } else if (msg.type === 'MATCH_SYNC') {
@@ -505,11 +865,15 @@ export default function App() {
         if (!isCareer && !st.tournament) setTournament(initTournamentState(cloned.teams));
         const mState = createInitialMatchState(a, b, tmId, plan, cloned.teams, st.league, isCareer);
         if (msg.autoStart) mState.run = 1;
+        onlineNet.resetReady();
         setDraft(cloned);
         setMatch(mState);
         setView('match');
       } else if (msg.type === 'MATCH_CTRL') {
-        if (msg.action === 'toggle') {
+        if (msg.action === 'start') {
+          onlineNet.resetReady();
+          setMatch((prev) => (prev ? { ...prev, run: 1 } : prev));
+        } else if (msg.action === 'toggle') {
           setMatch((prev) => (prev ? { ...prev, run: prev.run ? 0 : 1 } : prev));
         } else if (msg.action === 'speed') {
           const spd = Number(msg.speed) as 1 | 2 | 4;
@@ -652,33 +1016,42 @@ export default function App() {
         const isCareer = !!draftClone.m.career;
         finalizeMatchState(mNext, draftClone.teams, tourneyClone, isCareer);
 
+        const curNet = stateRef.current.net;
         if (isCareer && curLeague && !mNext.leagueWeekRecorded) {
-          const lgClone = cloneLeague(curLeague);
-          finalizeCareerWeekAfterUserMatch(
-            lgClone,
-            draftClone.teams,
-            { a: mNext.a, b: mNext.b },
-            mNext.sc[0],
-            mNext.sc[1],
-            mNext.goalsList[0],
-            mNext.goalsList[1],
-            mNext.playerStats
-          );
           mNext.leagueWeekRecorded = true;
-          setLeague(lgClone);
-          if (stateRef.current.net.connected && stateRef.current.net.role === 'host') {
-            onlineNet.send({
-              type: 'CAREER_SYNC',
-              teams: draftClone.teams,
-              league: {
-                ...lgClone,
-                usedEventIds: [...lgClone.usedEventIds],
-                usedNewsIds: [...lgClone.usedNewsIds],
-              },
-            });
+          if (!curNet.connected || curNet.role === 'host') {
+            const lgClone = cloneLeague(curLeague);
+            finalizeCareerWeekAfterUserMatch(
+              lgClone,
+              draftClone.teams,
+              { a: mNext.a, b: mNext.b },
+              mNext.sc[0],
+              mNext.sc[1],
+              mNext.goalsList[0],
+              mNext.goalsList[1],
+              mNext.playerStats
+            );
+            setLeague(lgClone);
+            if (curNet.connected && curNet.role === 'host') {
+              onlineNet.send({
+                type: 'CAREER_SYNC',
+                teams: draftClone.teams,
+                league: {
+                  ...lgClone,
+                  usedEventIds: [...lgClone.usedEventIds],
+                  usedNewsIds: [...lgClone.usedNewsIds],
+                },
+              });
+            }
           }
+        } else if (!isCareer && tourneyClone && curNet.connected && curNet.role === 'host') {
+          onlineNet.send({
+            type: 'TOURNEY_SYNC',
+            tournament: tourneyClone,
+          });
         }
 
+        onlineNet.resetReady();
         setDraft(draftClone);
         if (tourneyClone) setTournament(tourneyClone);
       }
@@ -697,112 +1070,57 @@ export default function App() {
   const handleSelectMode = (modeId: GameModeId) => {
     setMode(modeId);
     setSetupErr('');
+    let nextL = new Set(leagues);
+    let nextC = new Set(clubs);
+    let nextOpp = opp;
+
     if (modeId === 'iconic') {
-      setLeagues(new Set(['İkonik Takımlar']));
-      setClubs(new Set(ICONIC_CLUBS));
+      nextL = new Set(['İkonik Takımlar']);
+      nextC = new Set(ICONIC_CLUBS);
     } else if (modeId === 'career') {
-      const nextL = new Set(leagues);
       nextL.delete('İkonik Takımlar');
       if (nextL.size === 0) {
         MODERN_LEAGUES.forEach((l) => nextL.add(l));
       }
-      setLeagues(nextL);
-      const nextC = new Set(
-        [...clubs].filter((c) => CLUB_TO_LEAGUE[c] !== 'İkonik Takımlar')
-      );
-      setClubs(nextC);
+      nextC = new Set([...clubs].filter((c) => CLUB_TO_LEAGUE[c] !== 'İkonik Takımlar'));
+      nextOpp = 1;
       setOpp(1);
     } else {
       if (leagues.size === 1 && leagues.has('İkonik Takımlar')) {
-        setLeagues(new Set(MODERN_LEAGUES));
-        setClubs(new Set());
+        nextL = new Set(MODERN_LEAGUES);
+        nextC = new Set();
       }
     }
+    setLeagues(nextL);
+    setClubs(nextC);
+    broadcastSetupSync({ mode: modeId, leagues: nextL, clubs: nextC, opp: nextOpp });
+  };
+
+  const handleContinueToClubs = () => {
+    setSetupErr('');
+    if (net.connected) {
+      markReadyForPhase('setup');
+      return;
+    }
+    setView('clubs');
   };
 
   const handleStartDraft = () => {
     setSetupErr('');
-    const res = buildDraftState({
-      mode,
-      leagues,
-      clubs,
-      opp,
-      humanCount,
-      format,
-      strictPos,
-      netConnected: net.connected,
-      myTeamIdx: net.myTeamIdx,
-    });
-    if (!res.state) {
-      setSetupErr(res.error);
+    if (net.connected) {
+      markReadyForPhase('clubs');
       return;
     }
-
-    const d = res.state;
-    if (net.connected) {
-      d.teams[0].name = net.role === 'host' ? teamName : net.peerName || '1. Oyuncu';
-      d.teams[1].name = net.role === 'guest' ? teamName : net.peerName || '2. Oyuncu';
-      onlineNet.resetReady();
-      if (net.role === 'host') {
-        onlineNet.send({
-          type: 'START_DRAFT',
-          mode,
-          leagues: [...res.effectiveLeagues],
-          clubs: [...clubs],
-          opp,
-          format,
-          strictPos,
-          teamNames: d.teams.map((t) => t.name),
-          order: d.order,
-        });
-      }
-    } else if (teamName.trim()) {
-      d.teams[0].name = teamName.trim();
-    }
-
-    setLeagues(res.effectiveLeagues);
-    setDraft(d);
-    setTournament(null);
-    setLeague(null);
-    setMatch(null);
-    setWheel({ spinning: false, angle: 0, selectedClub: null, offeredPlayers: [], jokers: 3 });
-    setView('draft');
+    executeStartDraft();
   };
 
   const handleAutoCompleteDraft = () => {
     if (!draft) return;
-    const next = cloneDraftState(draft);
-    while (next.k < next.order.length) {
-      const ti = next.order[next.k];
-      const tm = next.teams[ti];
-      const chosen = chooseCpuPlayer(next, tm, strictPos);
-      if (!chosen) {
-        const fallback = next.pool.find((p) => !next.taken.has(p.id));
-        if (!fallback) break;
-        tm.picks.push(fallback);
-        tm.spent += cost(fallback);
-        siblingIds(next, fallback).forEach((id) => next.taken.add(id));
-        next.k++;
-        continue;
-      }
-      tm.picks.push(chosen);
-      tm.spent += cost(chosen);
-      siblingIds(next, chosen).forEach((id) => next.taken.add(id));
-      next.k++;
+    if (net.connected) {
+      markReadyForPhase('draft_auto');
+      return;
     }
-    next.teams.forEach((tm) => ensureTeamLineup(tm, null, false));
-    setDraft(next);
-    if (!next.m.career) {
-      setTournament(initTournamentState(next.teams));
-    }
-    setView('identity');
-
-    if (net.connected && net.role === 'host') {
-      onlineNet.send({
-        type: 'AUTO_COMPLETE_SYNC',
-        picksByTeam: next.teams.map((t) => t.picks.map((p) => p.id)),
-      });
-    }
+    executeAutoCompleteDraft();
   };
 
   const handleUndoPick = () => {
@@ -917,6 +1235,15 @@ export default function App() {
     if (patch.c2) tm.customIdentity.c2 = patch.c2;
     if (patch.club) tm.customIdentity.club = patch.club;
     setDraft(next);
+    if (net.connected) {
+      onlineNet.send({
+        type: 'IDENTITY_SYNC',
+        teamIdx,
+        name: tm.name,
+        customIdentity: tm.customIdentity,
+        identityDone: tm.identityDone,
+      });
+    }
   };
 
   const handleConfirmIdentity = (teamIdx: number) => {
@@ -939,6 +1266,10 @@ export default function App() {
     }
     setDraft(next);
     setSwapErr('');
+    if (net.connected) {
+      markReadyForPhase('identity');
+      return;
+    }
     setView('result');
   };
 
@@ -950,6 +1281,9 @@ export default function App() {
     autoBuildLineupForTeam(tm, form, league, !!next.m.career);
     setDraft(next);
     setSwapErr('');
+    if (net.connected) {
+      syncTeamLineupToPeer(teamIdx, tm, false);
+    }
   };
 
   const handleAutoLineup = (teamIdx: number) => {
@@ -960,6 +1294,9 @@ export default function App() {
     autoBuildLineupForTeam(tm, tm.formation || '4-3-3', league, !!next.m.career);
     setDraft(next);
     setSwapErr('');
+    if (net.connected) {
+      syncTeamLineupToPeer(teamIdx, tm, false);
+    }
   };
 
   const handleSwapPlayers = (teamIdx: number, id1: number, id2: number) => {
@@ -974,38 +1311,37 @@ export default function App() {
     }
     setSwapErr('');
     setDraft(next);
+    if (net.connected) {
+      syncTeamLineupToPeer(teamIdx, tm, false);
+    }
   };
 
   const handleProceedFromLineup = () => {
     if (!draft) return;
     const isCareer = !!draft.m.career;
-    if (isCareer) {
-      if (!league) {
-        setView('league_select');
-      } else {
-        setView('league_hub');
+
+    // Mid-career lineup adjustment (from CareerHubView -> Kadro & Taktik -> back to CareerHubView)
+    if (isCareer && league) {
+      if (net.connected) {
+        const myTm = draft.teams[net.myTeamIdx];
+        if (myTm) syncTeamLineupToPeer(net.myTeamIdx, myTm, false);
       }
+      setView('league_hub');
       return;
     }
 
     if (net.connected) {
       const myTm = draft.teams[net.myTeamIdx];
       if (myTm) {
-        ensureTeamLineup(myTm);
-        onlineNet.setReady(net.myTeamIdx, true);
-        onlineNet.send({
-          type: 'LINEUP_SYNC',
-          teamIdx: net.myTeamIdx,
-          name: myTm.name,
-          customIdentity: myTm.customIdentity,
-          formation: myTm.formation,
-          starterIds: (myTm.starters || []).map((p) => p.id),
-          benchIds: (myTm.bench || []).map((p) => p.id),
-          ready: true,
-        });
+        syncTeamLineupToPeer(net.myTeamIdx, myTm, true);
       }
-      const otherReady = !!onlineNet.snapshot.readyMap[1 - net.myTeamIdx];
-      if (!otherReady || net.role !== 'host') return;
+      markReadyForPhase('lineup');
+      return;
+    }
+
+    if (isCareer) {
+      executeInitPremierLeague();
+      return;
     }
 
     const nextTourney = tournament || initTournamentState(draft.teams);
@@ -1020,54 +1356,29 @@ export default function App() {
 
   const handleSelectPremierLeague = () => {
     if (!draft) return;
-    if (net.connected && net.role === 'guest') return;
-    const { teams: allTeams, league: lg } = initCareerLeague(draft.teams, draft.m.budget);
-    const nextDraft = cloneDraftState(draft);
-    nextDraft.teams = allTeams;
-    setDraft(nextDraft);
-    setLeague(lg);
-    setView('league_hub');
-    if (net.connected && net.role === 'host') {
-      onlineNet.send({
-        type: 'CAREER_INIT',
-        teams: allTeams,
-        league: {
-          ...lg,
-          usedEventIds: [...lg.usedEventIds],
-          usedNewsIds: [...lg.usedNewsIds],
-        },
-      });
+    if (net.connected) {
+      markReadyForPhase('league_select');
+      return;
     }
+    executeInitPremierLeague();
   };
 
   const handlePlayCareerMatch = () => {
     if (!draft || !league || league.week > league.maxWeeks) return;
-    const roundMatches = league.schedule[league.week - 1] || [];
-    const userMatch = roundMatches.find(
-      (m) => !m.done && (draft.teams[m.a]?.isHuman || draft.teams[m.b]?.isHuman)
-    );
-    if (!userMatch) return;
-    setupMatch(userMatch.a, userMatch.b, null);
+    if (net.connected) {
+      markReadyForPhase(`league_hub_w${league.week}`);
+      return;
+    }
+    executePlayCareerMatch();
   };
 
   const handleSimulateCareerSeason = () => {
-    if (!draft || !league) return;
+    if (!draft || !league || net.connected) return;
     const lgClone = cloneLeague(league);
     const draftClone = cloneDraftState(draft);
     simulateRestOfLeagueSeason(lgClone, draftClone.teams);
     setDraft(draftClone);
     setLeague(lgClone);
-    if (net.connected && net.role === 'host') {
-      onlineNet.send({
-        type: 'CAREER_SYNC',
-        teams: draftClone.teams,
-        league: {
-          ...lgClone,
-          usedEventIds: [...lgClone.usedEventIds],
-          usedNewsIds: [...lgClone.usedNewsIds],
-        },
-      });
-    }
   };
 
   const handleResetToSetup = () => {
@@ -1083,6 +1394,7 @@ export default function App() {
       cancelAnimationFrame(wheelRafRef.current);
       wheelRafRef.current = null;
     }
+    onlineNet.resetReady();
     setDraft(null);
     setTournament(null);
     setLeague(null);
@@ -1099,7 +1411,8 @@ export default function App() {
       return;
     }
     if (draft.m.career) {
-      setView(league ? 'league_hub' : 'league_select');
+      if (league) setView('league_hub');
+      else handleSelectPremierLeague();
       return;
     }
     const nextTourney = tournament || initTournamentState(draft.teams);
@@ -1141,7 +1454,7 @@ export default function App() {
         onCreateRoom={() => {
           const code = onlineNet.createRoom(teamName);
           setOnlineMsg(
-            `Oda Kodu ${code} oluşturuldu. Aşağıdaki davet linkini veya 5 haneli kodu arkadaşına gönder.`
+            `Oda Kodu ${code} oluşturuldu. Aşağıdaki davet linkini veya 5 haneli kodu arkadaşına gönder; bağlandığında bu pencere otomatik kapanacak.`
           );
         }}
         onJoinRoom={(code) => {
@@ -1150,7 +1463,7 @@ export default function App() {
             setOnlineMsg('Lütfen arkadaşının gönderdiği 5 haneli Oda Kodunu girin.');
             return;
           }
-          setOnlineMsg(`${res.code} numaralı odaya bulut rölesi üzerinden bağlanılıyor...`);
+          setOnlineMsg(`${res.code} numaralı odaya bağlanılıyor... Bağlandığında ekran otomatik açılacak.`);
         }}
         onDisconnect={() => {
           onlineNet.disconnect(false);
@@ -1171,16 +1484,21 @@ export default function App() {
             err={setupErr}
             net={net}
             onSelectMode={handleSelectMode}
-            onChangeOpp={setOpp}
-            onChangeHumanCount={setHumanCount}
-            onChangeFormat={setFormat}
-            onChangeStrictPos={setStrictPos}
-            onChangeTeamName={setTeamName}
-            onContinueToClubs={() => {
-              setSetupErr('');
-              setView('clubs');
+            onChangeOpp={(val) => {
+              setOpp(val);
+              broadcastSetupSync({ opp: val });
             }}
-            onOpenOnlineModal={() => setOnlineModalOpen(true)}
+            onChangeHumanCount={setHumanCount}
+            onChangeFormat={(fmt) => {
+              setFormat(fmt);
+              broadcastSetupSync({ format: fmt });
+            }}
+            onChangeStrictPos={(sp) => {
+              setStrictPos(sp);
+              broadcastSetupSync({ strictPos: sp });
+            }}
+            onChangeTeamName={setTeamName}
+            onContinueToClubs={handleContinueToClubs}
           />
         )}
 
@@ -1190,12 +1508,14 @@ export default function App() {
             leagues={leagues}
             clubs={clubs}
             err={setupErr}
+            net={net}
             onToggleLeague={(lgId) => {
               setSetupErr('');
               const next = new Set(leagues);
               if (next.has(lgId)) next.delete(lgId);
               else next.add(lgId);
               setLeagues(next);
+              broadcastSetupSync({ leagues: next });
             }}
             onToggleClub={(club) => {
               setSetupErr('');
@@ -1203,25 +1523,25 @@ export default function App() {
               if (next.has(club)) next.delete(club);
               else next.add(club);
               setClubs(next);
+              broadcastSetupSync({ clubs: next });
             }}
             onSelectPreset={(preset) => {
               setSetupErr('');
+              let nextL = new Set<string>();
+              let nextC = new Set<string>();
               if (preset === 'all') {
-                setLeagues(new Set(MODERN_LEAGUES));
-                setClubs(new Set());
+                nextL = new Set(MODERN_LEAGUES);
               } else if (preset === 'pl') {
-                setLeagues(new Set(['Premier Lig']));
-                setClubs(new Set());
+                nextL = new Set(['Premier Lig']);
               } else if (preset === 'superlig') {
-                setLeagues(new Set(['Trendyol Süper Lig']));
-                setClubs(new Set());
+                nextL = new Set(['Trendyol Süper Lig']);
               } else if (preset === 'iconic') {
-                setLeagues(new Set(['İkonik Takımlar']));
-                setClubs(new Set(ICONIC_CLUBS));
-              } else {
-                setLeagues(new Set());
-                setClubs(new Set());
+                nextL = new Set(['İkonik Takımlar']);
+                nextC = new Set(ICONIC_CLUBS);
               }
+              setLeagues(nextL);
+              setClubs(nextC);
+              broadcastSetupSync({ leagues: nextL, clubs: nextC });
             }}
             onBack={() => setView('setup')}
             onStartDraft={handleStartDraft}
@@ -1289,6 +1609,7 @@ export default function App() {
           <CareerHubView
             league={league}
             teams={draft.teams}
+            net={net}
             myTeamIdx={net.connected ? net.myTeamIdx : 0}
             onSwitchTab={(tab: LeagueTab) =>
               setLeague((prev) => (prev ? { ...prev, tab } : prev))
@@ -1303,7 +1624,7 @@ export default function App() {
             onResolveEventChoice={(choice: CareerEventChoice) => {
               const lgClone = cloneLeague(league);
               const draftClone = cloneDraftState(draft);
-              const userTeam = draftClone.teams[0];
+              const userTeam = draftClone.teams[net.connected ? net.myTeamIdx : 0];
               const msg = choice.effect({ lg: lgClone, userTeam });
               if (lgClone.activeEvent) {
                 lgClone.eventHistory.unshift({
@@ -1342,25 +1663,45 @@ export default function App() {
             league={league}
             net={net}
             onToggleKickoff={() => {
+              if (net.connected && match.min === 0 && !match.run) {
+                const matchKey = `${match.a}_${match.b}_${match.tourneyMatchId || 'career'}`;
+                markReadyForPhase(`match_kickoff_${matchKey}`);
+                return;
+              }
               setMatch((prev) => (prev ? { ...prev, run: prev.run ? 0 : 1 } : prev));
-              if (net.connected && net.role === 'host') {
+              if (net.connected) {
                 onlineNet.send({ type: 'MATCH_CTRL', action: 'toggle' });
               }
             }}
             onSetSpeed={(spd) => {
               setMatch((prev) => (prev ? { ...prev, speed: spd } : prev));
-              if (net.connected && net.role === 'host') {
+              if (net.connected) {
                 onlineNet.send({ type: 'MATCH_CTRL', action: 'speed', speed: spd });
               }
             }}
-            onFinishInstantly={() => handleFinishInstantly(false)}
-            onStartNextTournamentMatch={(a, b, id) => setupMatch(a, b, id)}
-            onBackAfterMatch={() => {
-              if (draft.m.career && league) {
-                setView('league_hub');
-              } else {
-                setView('result');
+            onFinishInstantly={() => {
+              if (net.connected) {
+                const matchKey = `${match.a}_${match.b}_${match.tourneyMatchId || 'career'}`;
+                markReadyForPhase(`match_instant_${matchKey}`);
+                return;
               }
+              handleFinishInstantly(false);
+            }}
+            onStartNextTournamentMatch={(a, b, id) => {
+              if (net.connected) {
+                const matchKey = `${match.a}_${match.b}_${match.tourneyMatchId || 'career'}`;
+                markReadyForPhase(`match_done_${matchKey}`);
+                return;
+              }
+              setupMatch(a, b, id);
+            }}
+            onBackAfterMatch={() => {
+              if (net.connected) {
+                const matchKey = `${match.a}_${match.b}_${match.tourneyMatchId || 'career'}`;
+                markReadyForPhase(`match_done_${matchKey}`);
+                return;
+              }
+              executeAfterMatchProceed();
             }}
           />
         )}
@@ -1368,3 +1709,4 @@ export default function App() {
     </div>
   );
 }
+

@@ -54,6 +54,16 @@ export function getRoomInviteUrl(roomCode: string): string {
   }
 }
 
+export function isPeerReadyForPhase(
+  net: NetStateSnapshot,
+  phase: string,
+  teamIdx: number
+): boolean {
+  if (!net.connected) return false;
+  if (!phase) return !!net.readyMap[teamIdx];
+  return net.readyPhase === phase && !!net.readyMap[teamIdx];
+}
+
 export class OnlineRoomController {
   private peer: Peer | null = null;
   private conn: DataConnection | null = null;
@@ -68,6 +78,7 @@ export class OnlineRoomController {
     statusText: 'Bağlı Değil',
     myTeamIdx: 0,
     peerName: '',
+    readyPhase: '',
     readyMap: { 0: false, 1: false },
     chatLog: [],
   };
@@ -107,7 +118,17 @@ export class OnlineRoomController {
     this.emitState();
   }
 
-  resetReady(): void {
+  setPhaseReady(phase: string, teamIdx: number, ready: boolean): void {
+    if (this.snapshot.readyPhase !== phase) {
+      this.snapshot.readyPhase = phase;
+      this.snapshot.readyMap = { 0: false, 1: false };
+    }
+    this.snapshot.readyMap = { ...this.snapshot.readyMap, [teamIdx]: ready };
+    this.emitState();
+  }
+
+  resetReady(nextPhase = ''): void {
+    this.snapshot.readyPhase = nextPhase;
     this.snapshot.readyMap = { 0: false, 1: false };
     this.emitState();
   }
@@ -177,6 +198,10 @@ export class OnlineRoomController {
     });
   }
 
+  public receiveSyntheticMessage(msg: NetEnvelope): void {
+    this.processIncomingEnvelope(msg);
+  }
+
   private processIncomingEnvelope(msg: NetEnvelope): void {
     if (!msg || !msg.type) return;
     if (msg._from && msg._from === this.snapshot.role) return;
@@ -195,7 +220,9 @@ export class OnlineRoomController {
     this.send(
       {
         type: 'HELLO',
-        name: !teamName || teamName === 'Senin Takımın' ? '2. Oyuncu (Misafir)' : teamName,
+        name: !teamName || teamName === 'Senin Takımın' || teamName === '1. Oyuncu'
+          ? '2. Oyuncu (Misafir)'
+          : teamName,
       },
       true
     );
@@ -210,7 +237,7 @@ export class OnlineRoomController {
         return;
       }
       this.sendHello(teamName);
-    }, 1200);
+    }, 900);
   }
 
   private stopHelloLoop(): void {
@@ -230,6 +257,7 @@ export class OnlineRoomController {
       statusText: `Oda Kuruldu (${code}) · Arkadaşının bağlanması bekleniyor...`,
       myTeamIdx: 0,
       peerName: '',
+      readyPhase: '',
       readyMap: { 0: false, 1: false },
       chatLog: [],
     };
@@ -265,6 +293,7 @@ export class OnlineRoomController {
       statusText: `Oda ${code} ile bağlantı kuruluyor...`,
       myTeamIdx: 1,
       peerName: '',
+      readyPhase: '',
       readyMap: { 0: false, 1: false },
       chatLog: [],
     };
@@ -353,6 +382,7 @@ export class OnlineRoomController {
       statusText: 'Bağlı Değil',
       myTeamIdx: 0,
       peerName: '',
+      readyPhase: '',
       readyMap: { 0: false, 1: false },
       chatLog: [],
     };
@@ -361,6 +391,11 @@ export class OnlineRoomController {
 }
 
 export const onlineNet = new OnlineRoomController();
+
+if (typeof window !== 'undefined') {
+  (window as unknown as Record<string, unknown>).__onlineNet = onlineNet;
+}
+
 
 export async function copyToClipboardSafe(text: string): Promise<boolean> {
   if (!text) return false;

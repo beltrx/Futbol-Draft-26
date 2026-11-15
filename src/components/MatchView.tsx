@@ -1,4 +1,5 @@
 import React from 'react';
+import { isPeerReadyForPhase } from '../services/onlineNet';
 import type {
   DraftState,
   LeagueState,
@@ -7,7 +8,7 @@ import type {
   TournamentState,
 } from '../types/game';
 import { getActiveTournamentMatch } from '../utils/matchEngine';
-import { TeamIdentityBadge } from './ClubBadge';
+import { OnlineReadyBadges, TeamIdentityBadge } from './ClubBadge';
 
 interface MatchViewProps {
   draft: DraftState;
@@ -38,8 +39,26 @@ export const MatchView: React.FC<MatchViewProps> = ({
   const teamA = draft.teams[match.a];
   const teamB = draft.teams[match.b];
   const finished = match.run === 0 && match.min >= match.plan.maxMin;
-  const canControl = !net.connected || net.role === 'host';
   const activeTourneyMatch = !isCareer ? getActiveTournamentMatch(tournament) : null;
+
+  const matchKey = `${match.a}_${match.b}_${match.tourneyMatchId || 'career'}`;
+  const kickoffPhase = `match_kickoff_${matchKey}`;
+  const instantPhase = `match_instant_${matchKey}`;
+  const donePhase = `match_done_${matchKey}`;
+
+  const myKickoffReady = isPeerReadyForPhase(net, kickoffPhase, net.myTeamIdx);
+  const myInstantReady = isPeerReadyForPhase(net, instantPhase, net.myTeamIdx);
+  const myDoneReady = isPeerReadyForPhase(net, donePhase, net.myTeamIdx);
+
+  const nextHumanCareerMatch =
+    isCareer && league && league.week <= league.maxWeeks
+      ? (league.schedule[league.week - 1] || []).find(
+          (m) =>
+            !m.done &&
+            !(m.a === match.a && m.b === match.b) &&
+            (draft.teams[m.a]?.isHuman || draft.teams[m.b]?.isHuman)
+        ) || null
+      : null;
 
   const statRows: { label: string; left: string | number; right: string | number; lVal: number; rVal: number }[] = [
     { label: 'Toplam Şut', left: match.shots[0], right: match.shots[1], lVal: match.shots[0], rVal: match.shots[1] },
@@ -140,15 +159,28 @@ export const MatchView: React.FC<MatchViewProps> = ({
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2 border-t border-[var(--border)] pt-3">
-          {!finished && canControl && (
+          {!finished && (
             <>
-              <button
-                type="button"
-                onClick={onToggleKickoff}
-                className="rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-4 py-2 text-xs font-bold text-white hover:bg-[#15803d]"
-              >
-                {match.run ? 'Duraklat ❚❚' : match.min > 0 ? 'Devam Et ▶' : 'Maçı Başlat ▶'}
-              </button>
+              {net.connected && match.min === 0 && !match.run && (
+                <OnlineReadyBadges net={net} phase={kickoffPhase} />
+              )}
+              {(!net.connected || (match.min === 0 && !match.run)) && (
+                <button
+                  type="button"
+                  onClick={onToggleKickoff}
+                  className="rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-4 py-2 text-xs font-bold text-white hover:bg-[#15803d]"
+                >
+                  {net.connected
+                    ? myKickoffReady
+                      ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
+                      : 'Santra İçin Hazır Ol ▶'
+                    : match.run
+                    ? 'Duraklat ❚❚'
+                    : match.min > 0
+                    ? 'Devam Et ▶'
+                    : 'Maçı Başlat ▶'}
+                </button>
+              )}
               {([1, 2, 4] as const).map((spd) => (
                 <button
                   key={spd}
@@ -164,33 +196,50 @@ export const MatchView: React.FC<MatchViewProps> = ({
                   {spd}x
                 </button>
               ))}
+              {net.connected && net.readyPhase === instantPhase && (
+                <OnlineReadyBadges net={net} phase={instantPhase} />
+              )}
               <button
                 type="button"
                 onClick={onFinishInstantly}
                 className="rounded-xl border border-amber-400/50 bg-amber-900/50 px-4 py-2 text-xs font-bold text-amber-100 hover:bg-amber-800/70"
               >
-                Maçı Anında Bitir ⏭
+                {net.connected
+                  ? myInstantReady
+                    ? 'Hızlı Bitir: Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
+                    : 'Hızlı Bitirmek İçin Hazır Ol ⏭'
+                  : 'Maçı Anında Bitir ⏭'}
               </button>
             </>
           )}
 
           {finished && (
             <>
+              {net.connected && <OnlineReadyBadges net={net} phase={donePhase} />}
               {isCareer && league && (
                 <button
                   type="button"
                   onClick={onBackAfterMatch}
                   className="rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-5 py-2.5 text-xs font-bold text-white shadow-[0_6px_18px_-6px_rgba(34,197,94,0.65)]"
                 >
-                  Premier Lig Merkezine Dön →
+                  {nextHumanCareerMatch
+                    ? net.connected
+                      ? myDoneReady
+                        ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
+                        : `Haftanın 2. Maçı İçin Hazır Ol (${draft.teams[nextHumanCareerMatch.a]?.name} vs ${draft.teams[nextHumanCareerMatch.b]?.name}) →`
+                      : `Haftanın 2. Maçına Geç (${draft.teams[nextHumanCareerMatch.a]?.name} vs ${draft.teams[nextHumanCareerMatch.b]?.name}) →`
+                    : net.connected
+                    ? myDoneReady
+                      ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
+                      : 'Yeni Haftaya Geçmek İçin Hazır Ol →'
+                    : 'Premier Lig Merkezine Dön →'}
                 </button>
               )}
               {!isCareer &&
                 activeTourneyMatch &&
                 !activeTourneyMatch.done &&
                 activeTourneyMatch.a != null &&
-                activeTourneyMatch.b != null &&
-                canControl && (
+                activeTourneyMatch.b != null && (
                   <button
                     type="button"
                     onClick={() =>
@@ -202,7 +251,11 @@ export const MatchView: React.FC<MatchViewProps> = ({
                     }
                     className="rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-5 py-2.5 text-xs font-bold text-white"
                   >
-                    Sıradaki Maç: {activeTourneyMatch.title} →
+                    {net.connected
+                      ? myDoneReady
+                        ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
+                        : `Sıradaki Maç (${activeTourneyMatch.title}) İçin Hazır Ol →`
+                      : `Sıradaki Maç: ${activeTourneyMatch.title} →`}
                   </button>
                 )}
               {!isCareer && (!activeTourneyMatch || activeTourneyMatch.done) && (
@@ -211,7 +264,11 @@ export const MatchView: React.FC<MatchViewProps> = ({
                   onClick={onBackAfterMatch}
                   className="rounded-xl border border-[var(--border)] bg-[var(--raised)] px-4 py-2 text-xs font-bold text-white"
                 >
-                  Kadro &amp; Turnuva Özetine Dön
+                  {net.connected
+                    ? myDoneReady
+                      ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
+                      : 'Turnuva Özetine Dönmek İçin Hazır Ol →'
+                    : 'Kadro & Turnuva Özetine Dön'}
                 </button>
               )}
             </>

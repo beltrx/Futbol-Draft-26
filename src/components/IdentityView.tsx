@@ -5,8 +5,10 @@ import {
   CLUB_TO_LEAGUE,
   CUSTOM_SHAPES,
 } from '../data/database';
+import { isPeerReadyForPhase } from '../services/onlineNet';
 import type { DraftState, IdentityShape, NetStateSnapshot } from '../types/game';
-import { ClubLogo, PosBadge, TeamIdentityBadge } from './ClubBadge';
+import { ClubLogo, OnlineReadyBadges, PosBadge, TeamIdentityBadge } from './ClubBadge';
+
 
 interface IdentityViewProps {
   draft: DraftState;
@@ -63,6 +65,8 @@ export const IdentityView: React.FC<IdentityViewProps> = ({
 
   if (!team) return null;
 
+  const myReady = isPeerReadyForPhase(net, 'identity', net.myTeamIdx);
+
   return (
     <section aria-label="Takım Kimliği ve Logo Tasarımı" className="space-y-4">
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-lg">
@@ -82,25 +86,28 @@ export const IdentityView: React.FC<IdentityViewProps> = ({
             </div>
           </div>
 
-          {humanIndices.length > 1 && (
-            <div className="flex gap-2">
-              {humanIndices.map((idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  aria-pressed={safeIdx === idx}
-                  onClick={() => setSelectedTeamIdx(idx)}
-                  className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${
-                    safeIdx === idx
-                      ? 'border-[var(--pri-bright)] bg-[var(--pri)] text-white'
-                      : 'border-[var(--border)] bg-[var(--card)] text-[var(--muted)]'
-                  }`}
-                >
-                  {draft.teams[idx].name}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {net.connected && <OnlineReadyBadges net={net} phase="identity" />}
+            {humanIndices.length > 1 && (
+              <div className="flex gap-2">
+                {humanIndices.map((idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    aria-pressed={safeIdx === idx}
+                    onClick={() => setSelectedTeamIdx(idx)}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${
+                      safeIdx === idx
+                        ? 'border-[var(--pri-bright)] bg-[var(--pri)] text-white'
+                        : 'border-[var(--border)] bg-[var(--card)] text-[var(--muted)]'
+                    }`}
+                  >
+                    {draft.teams[idx].name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -305,13 +312,22 @@ export const IdentityView: React.FC<IdentityViewProps> = ({
             </div>
           </div>
 
-          <div className="mt-4 border-t border-[var(--border)] pt-4">
+          <div className="mt-4 space-y-2.5 border-t border-[var(--border)] pt-4">
+            {net.connected && (
+              <div className="flex justify-center">
+                <OnlineReadyBadges net={net} phase="identity" />
+              </div>
+            )}
             <button
               type="button"
               onClick={() => onConfirmIdentity(safeIdx)}
               className="w-full rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-4 py-3 text-sm font-bold text-white shadow-[0_8px_24px_-6px_rgba(34,197,94,0.65)] transition hover:bg-[#15803d]"
             >
-              Takım Kimliğini Onayla &amp; Dizilişe Geç →
+              {net.connected
+                ? myReady
+                  ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
+                  : 'Takım Kimliğini Onayla & Hazır Ol →'
+                : 'Takım Kimliğini Onayla & Dizilişe Geç →'}
             </button>
           </div>
         </div>
@@ -319,3 +335,4 @@ export const IdentityView: React.FC<IdentityViewProps> = ({
     </section>
   );
 };
+
