@@ -108,6 +108,7 @@ export default function App() {
   const [format, setFormat] = useState<'snake' | 'linear'>('snake');
   const [strictPos, setStrictPos] = useState<boolean>(true);
   const [teamName, setTeamName] = useState<string>('1. Oyuncu');
+  const [careerLeague, setCareerLeague] = useState<string>('Premier Lig');
   const [setupErr, setSetupErr] = useState<string>('');
   const [swapErr, setSwapErr] = useState<string>('');
 
@@ -142,6 +143,7 @@ export default function App() {
     format,
     strictPos,
     teamName,
+    careerLeague,
     draft,
     wheel,
     tournament,
@@ -159,6 +161,7 @@ export default function App() {
     format,
     strictPos,
     teamName,
+    careerLeague,
     draft,
     wheel,
     tournament,
@@ -272,6 +275,7 @@ export default function App() {
       opp?: number;
       format?: 'snake' | 'linear';
       strictPos?: boolean;
+      careerLeague?: string;
     }) => {
       const st = stateRef.current;
       if (!st.net.connected || st.net.role !== 'host') return;
@@ -284,6 +288,7 @@ export default function App() {
         opp: patch?.opp ?? st.opp,
         format: patch?.format ?? st.format,
         strictPos: patch?.strictPos ?? st.strictPos,
+        careerLeague: patch?.careerLeague ?? st.careerLeague,
       });
     },
     []
@@ -514,17 +519,20 @@ export default function App() {
     }
   }, []);
 
-  const executeInitPremierLeague = useCallback(() => {
-    const { draft: curDraft, net: curNet } = stateRef.current;
+  const executeInitPremierLeague = useCallback((overrideLeague?: string) => {
+    const { draft: curDraft, net: curNet, careerLeague: curCareerLg } = stateRef.current;
     if (!curDraft) return;
     if (curNet.connected && curNet.role === 'guest') return;
+    const chosenLeague = overrideLeague || curCareerLg || 'Premier Lig';
     const { teams: allTeams, league: lg } = initCareerLeague(
       curDraft.teams,
-      curDraft.m.budget
+      curDraft.m.budget,
+      chosenLeague
     );
     const nextDraft = cloneDraftState(curDraft);
     nextDraft.teams = allTeams;
     onlineNet.resetReady();
+    setCareerLeague(chosenLeague);
     setDraft(nextDraft);
     setLeague(lg);
     setView('league_hub');
@@ -551,6 +559,29 @@ export default function App() {
     if (!userMatch) return;
     setupMatch(userMatch.a, userMatch.b, null);
   }, [setupMatch]);
+
+  const resetAllToSetup = useCallback(() => {
+    if (matchTimerRef.current != null) {
+      window.clearInterval(matchTimerRef.current);
+      matchTimerRef.current = null;
+    }
+    if (cpuTimerRef.current != null) {
+      window.clearTimeout(cpuTimerRef.current);
+      cpuTimerRef.current = null;
+    }
+    if (wheelRafRef.current != null) {
+      cancelAnimationFrame(wheelRafRef.current);
+      wheelRafRef.current = null;
+    }
+    onlineNet.resetReady();
+    setDraft(null);
+    setTournament(null);
+    setLeague(null);
+    setMatch(null);
+    setSetupErr('');
+    setSwapErr('');
+    setView('setup');
+  }, []);
 
   const executeAfterMatchProceed = useCallback(() => {
     const {
@@ -602,12 +633,11 @@ export default function App() {
       return;
     }
 
-    onlineNet.resetReady();
-    setView('result');
     if (curNet.connected && curNet.role === 'host') {
-      onlineNet.send({ type: 'PHASE_ADVANCE', to: 'result' });
+      onlineNet.send({ type: 'PHASE_ADVANCE', to: 'setup' });
     }
-  }, [setupMatch]);
+    resetAllToSetup();
+  }, [setupMatch, resetAllToSetup]);
 
   // Host Lockstep Coordinator: whenever BOTH players mark Ready for the active phase, advance both players together!
   useEffect(() => {
@@ -696,6 +726,7 @@ export default function App() {
               opp: st.opp,
               format: st.format,
               strictPos: st.strictPos,
+              careerLeague: st.careerLeague,
               view: st.view === 'clubs' ? 'clubs' : 'setup',
             },
             true
@@ -714,6 +745,7 @@ export default function App() {
         if (msg.opp != null) setOpp(Number(msg.opp));
         if (msg.format) setFormat(msg.format as 'snake' | 'linear');
         if (msg.strictPos != null) setStrictPos(Boolean(msg.strictPos));
+        if (msg.careerLeague) setCareerLeague(String(msg.careerLeague));
         if (msg.view === 'clubs' || msg.view === 'setup') {
           setView(msg.view as AppView);
         }
@@ -738,6 +770,7 @@ export default function App() {
         if (msg.opp != null) setOpp(Number(msg.opp));
         if (msg.format) setFormat(msg.format as 'snake' | 'linear');
         if (msg.strictPos != null) setStrictPos(Boolean(msg.strictPos));
+        if (msg.careerLeague) setCareerLeague(String(msg.careerLeague));
       } else if (msg.type === 'SETUP_ERR') {
         setSetupErr(String(msg.error || ''));
         onlineNet.resetReady();
@@ -756,7 +789,9 @@ export default function App() {
         }
       } else if (msg.type === 'PHASE_ADVANCE') {
         const nextView = msg.to as AppView;
-        if (nextView) {
+        if (nextView === 'setup') {
+          resetAllToSetup();
+        } else if (nextView) {
           onlineNet.resetReady();
           setSetupErr('');
           setSwapErr('');
@@ -967,7 +1002,8 @@ export default function App() {
       }
 
       const autostart = params.get('autostart');
-      if (autostart === '1' || autostart === 'career') {
+      if (autostart === '1' || autostart === 'career' || autostart === 'bundesliga') {
+        const startLeague = autostart === 'bundesliga' ? 'Bundesliga' : 'Premier Lig';
         const res = buildDraftState({
           mode: 'career',
           leagues: new Set(MODERN_LEAGUES),
@@ -990,8 +1026,13 @@ export default function App() {
           }
           d.teams[0].name = 'Atletik İstanbul';
           d.teams.forEach((tm) => ensureTeamLineup(tm, null, false));
-          const { teams: allTeams, league: lg } = initCareerLeague(d.teams, d.m.budget);
+          const { teams: allTeams, league: lg } = initCareerLeague(
+            d.teams,
+            d.m.budget,
+            startLeague
+          );
           d.teams = allTeams;
+          setCareerLeague(startLeague);
           setDraft(d);
           setLeague(lg);
           setView('league_hub');
@@ -1421,13 +1462,17 @@ export default function App() {
     }
   };
 
-  const handleSelectPremierLeague = () => {
+  const handleSelectPremierLeague = (chosenLeague?: string) => {
     if (!draft) return;
+    if (chosenLeague) {
+      setCareerLeague(chosenLeague);
+      broadcastSetupSync({ careerLeague: chosenLeague });
+    }
     if (net.connected) {
       markReadyForPhase('league_select');
       return;
     }
-    executeInitPremierLeague();
+    executeInitPremierLeague(chosenLeague);
   };
 
   const handlePlayCareerMatch = () => {
@@ -1449,26 +1494,7 @@ export default function App() {
   };
 
   const handleResetToSetup = () => {
-    if (matchTimerRef.current != null) {
-      window.clearInterval(matchTimerRef.current);
-      matchTimerRef.current = null;
-    }
-    if (cpuTimerRef.current != null) {
-      window.clearTimeout(cpuTimerRef.current);
-      cpuTimerRef.current = null;
-    }
-    if (wheelRafRef.current != null) {
-      cancelAnimationFrame(wheelRafRef.current);
-      wheelRafRef.current = null;
-    }
-    onlineNet.resetReady();
-    setDraft(null);
-    setTournament(null);
-    setLeague(null);
-    setMatch(null);
-    setSetupErr('');
-    setSwapErr('');
-    setView('setup');
+    resetAllToSetup();
   };
 
   const handleGoMatchDirect = () => {
@@ -1548,6 +1574,7 @@ export default function App() {
             format={format}
             strictPos={strictPos}
             teamName={teamName}
+            careerLeague={careerLeague}
             err={setupErr}
             net={net}
             onSelectMode={handleSelectMode}
@@ -1565,6 +1592,10 @@ export default function App() {
               broadcastSetupSync({ strictPos: sp });
             }}
             onChangeTeamName={setTeamName}
+            onChangeCareerLeague={(lgName) => {
+              setCareerLeague(lgName);
+              broadcastSetupSync({ careerLeague: lgName });
+            }}
             onContinueToClubs={handleContinueToClubs}
           />
         )}
@@ -1600,6 +1631,8 @@ export default function App() {
                 nextL = new Set(MODERN_LEAGUES);
               } else if (preset === 'pl') {
                 nextL = new Set(['Premier Lig']);
+              } else if (preset === 'bundesliga') {
+                nextL = new Set(['Bundesliga']);
               } else if (preset === 'superlig') {
                 nextL = new Set(['Trendyol Süper Lig']);
               } else if (preset === 'iconic') {
@@ -1648,11 +1681,16 @@ export default function App() {
           <LineupView
             draft={draft}
             league={league}
+            careerLeague={careerLeague}
             net={net}
             swapError={swapErr}
             onSelectFormation={handleSelectFormation}
             onAutoLineup={handleAutoLineup}
             onSwapPlayers={handleSwapPlayers}
+            onChangeCareerLeague={(lgName) => {
+              setCareerLeague(lgName);
+              broadcastSetupSync({ careerLeague: lgName });
+            }}
             onProceed={handleProceedFromLineup}
             onEditIdentity={() => setView('identity')}
           />
@@ -1667,7 +1705,7 @@ export default function App() {
                 .join(' & ') || 'Kulübün'
             }
             isGuestWaiting={net.connected && net.role === 'guest'}
-            onSelectPremierLeague={handleSelectPremierLeague}
+            onSelectLeague={(lgName) => handleSelectPremierLeague(lgName)}
             onBackToLineup={() => setView('result')}
           />
         )}

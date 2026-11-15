@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { AppView, DraftState, LeagueState, NetStateSnapshot } from '../types/game';
+import { LeagueLogo } from './ClubBadge';
 
 interface HeaderBarProps {
   view: AppView;
@@ -100,9 +101,10 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             <button
               type="button"
               onClick={() => onNavigate('league_hub')}
-              className="rounded-lg border border-[var(--pri-bright)] bg-[var(--pri)] px-3 py-1.5 text-xs font-semibold text-[var(--pri-fg)] transition hover:bg-[#15803d]"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--pri-bright)] bg-[var(--pri)] px-3 py-1.5 text-xs font-semibold text-[var(--pri-fg)] transition hover:bg-[#15803d]"
             >
-              Premier Lig Merkezi
+              <LeagueLogo league={league.leagueName} size={15} />
+              <span>{league.leagueName} Merkezi</span>
             </button>
           )}
 

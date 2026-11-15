@@ -288,11 +288,14 @@ test('Ratings are hidden from all rival news badges and career event texts, and 
     }
   }
 
-  assert.equal(MODES.length, 6);
+  assert.equal(MODES.length, 4);
   const modeIds = new Set(MODES.map((m) => m.id));
   assert.equal(modeIds.has('career'), true);
-  assert.equal((modeIds as Set<string>).has('random'), false);
-  assert.equal((modeIds as Set<string>).has('league'), false);
+  assert.equal(modeIds.has('classic'), true);
+  assert.equal(modeIds.has('wheel'), true);
+  assert.equal(modeIds.has('budget'), true);
+  assert.equal((modeIds as Set<string>).has('club'), false);
+  assert.equal((modeIds as Set<string>).has('iconic'), false);
 
   const expectedSvgClubs = [
     'Flamengo',
@@ -309,10 +312,62 @@ test('Ratings are hidden from all rival news badges and career event texts, and 
     'River Plate',
     'Benfica',
     'Villarreal',
+    'Stuttgart',
+    'Hoffenheim',
+    'Eintracht Frankfurt',
+    'Augsburg',
+    'Mainz',
+    'Koln',
+    'Hamburg',
+    'Gladbach',
+    'Werder Bremen',
+    'Union Berlin',
+    'Schalke',
+    'Elversberg',
+    'Paderborn',
+    'Bologna',
   ];
   for (const club of expectedSvgClubs) {
-    assert.ok(CUSTOM_CLUB_LOGOS[club]?.endsWith('.svg'), `Expected SVG logo for ${club}`);
+    assert.ok(
+      CUSTOM_CLUB_LOGOS[club]?.startsWith('data:image/svg+xml') ||
+        CUSTOM_CLUB_LOGOS[club]?.endsWith('.svg'),
+      `Expected SVG logo for ${club}`
+    );
   }
+});
+
+test('Bundesliga Career mode builds 18 teams / 34 weeks, drops Paderborn (1P) & Elversberg (2P), and keeps Bologna in Serie A', () => {
+  assert.equal(CLUB_TO_LEAGUE['Bologna'], 'Serie A');
+  assert.equal(CLUB_TO_LEAGUE['Stuttgart'], 'Bundesliga');
+  assert.equal(CLUB_TO_LEAGUE['Paderborn'], 'Bundesliga');
+  assert.equal(CLUB_TO_LEAGUE['Elversberg'], 'Bundesliga');
+
+  const { state } = buildDraftState({
+    mode: 'career',
+    leagues: new Set(['Bundesliga']),
+    clubs: new Set(),
+    opp: 1,
+    humanCount: 1,
+    format: 'snake',
+    strictPos: true,
+  });
+  assert.ok(state);
+  while (state.k < state.order.length) {
+    const p = chooseCpuPlayer(state, state.teams[0], true)!;
+    state.teams[0].picks.push(p);
+    state.teams[0].spent += cost(p);
+    state.taken.add(p.id);
+    state.k++;
+  }
+
+  const { teams, league } = initCareerLeague(state.teams, 360, 'Bundesliga');
+  assert.equal(league.leagueName, 'Bundesliga');
+  assert.equal(teams.length, 18);
+  assert.equal(league.maxWeeks, 34);
+  assert.equal(league.schedule.length, 34);
+  assert.equal(teams.some((t) => t.name === 'Bologna'), false);
+  assert.equal(teams.some((t) => t.name === 'Paderborn'), false);
+  assert.equal(teams.some((t) => t.name === 'Bayern Munchen'), true);
 });
 
 test('buildPitchRowsForTeam orders rows from FWD (top) down to GK (bottom) across all formations', () => {

@@ -10,7 +10,7 @@ import {
 import { isPeerReadyForPhase } from '../services/onlineNet';
 import type { GameModeId, NetStateSnapshot } from '../types/game';
 import { getModeDef } from '../utils/draftLogic';
-import { ClubLogo, OnlineReadyBadges } from './ClubBadge';
+import { ClubLogo, LeagueLogo, OnlineReadyBadges } from './ClubBadge';
 
 interface ClubSelectViewProps {
   mode: GameModeId;
@@ -20,7 +20,7 @@ interface ClubSelectViewProps {
   net: NetStateSnapshot;
   onToggleLeague: (lgId: string) => void;
   onToggleClub: (club: string) => void;
-  onSelectPreset: (preset: 'all' | 'pl' | 'superlig' | 'iconic' | 'clear') => void;
+  onSelectPreset: (preset: 'all' | 'pl' | 'bundesliga' | 'superlig' | 'iconic' | 'clear') => void;
   onBack: () => void;
   onStartDraft: () => void;
 }
@@ -137,9 +137,18 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
                   <button
                     type="button"
                     onClick={() => onSelectPreset('pl')}
-                    className="rounded border border-[var(--border)] bg-[var(--raised)] px-2.5 py-1 text-xs font-semibold hover:bg-[var(--accent)]"
+                    className="inline-flex items-center gap-1.5 rounded border border-[var(--border)] bg-[var(--raised)] px-2.5 py-1 text-xs font-semibold hover:bg-[var(--accent)]"
                   >
-                    Premier Lig
+                    <LeagueLogo league="Premier Lig" size={14} />
+                    <span>Premier Lig</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectPreset('bundesliga')}
+                    className="inline-flex items-center gap-1.5 rounded border border-[var(--border)] bg-[var(--raised)] px-2.5 py-1 text-xs font-semibold hover:bg-[var(--accent)]"
+                  >
+                    <LeagueLogo league="Bundesliga" size={14} />
+                    <span>Bundesliga</span>
                   </button>
                   <button
                     type="button"
@@ -190,8 +199,11 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
                       : 'border-[var(--border)] bg-[var(--card)] text-[var(--muted)] hover:bg-[var(--raised)]'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-bold text-[var(--fg)]">{lg.name}</span>
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--fg)]">
+                      <LeagueLogo league={lg.id} size={18} />
+                      <span className="truncate">{lg.name}</span>
+                    </span>
                     {active && <span className="text-xs font-bold text-[var(--pri-bright)]">✓</span>}
                   </div>
                   <span className="mt-1 text-[11px] text-[var(--muted)]">

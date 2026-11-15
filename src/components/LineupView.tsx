@@ -12,16 +12,24 @@ import {
   isPlayerSuspendedInCareer,
   isPlayerUnavailableInCareer,
 } from '../utils/lineupLogic';
-import { ClubLogo, OnlineReadyBadges, PosBadge, TeamIdentityBadge } from './ClubBadge';
+import {
+  ClubLogo,
+  LeagueLogo,
+  OnlineReadyBadges,
+  PosBadge,
+  TeamIdentityBadge,
+} from './ClubBadge';
 
 interface LineupViewProps {
   draft: DraftState;
   league: LeagueState | null;
+  careerLeague?: string;
   net: NetStateSnapshot;
   swapError: string;
   onSelectFormation: (teamIdx: number, formation: FormationName) => void;
   onAutoLineup: (teamIdx: number) => void;
   onSwapPlayers: (teamIdx: number, id1: number, id2: number) => void;
+  onChangeCareerLeague?: (leagueName: string) => void;
   onProceed: () => void;
   onEditIdentity: () => void;
 }
@@ -31,15 +39,19 @@ const FORMATION_NAMES: FormationName[] = ['4-3-3', '4-2-3-1', '4-4-2', '3-5-2'];
 export const LineupView: React.FC<LineupViewProps> = ({
   draft,
   league,
+  careerLeague = 'Premier Lig',
   net,
   swapError,
   onSelectFormation,
   onAutoLineup,
   onSwapPlayers,
+  onChangeCareerLeague,
   onProceed,
   onEditIdentity,
 }) => {
   const isCareer = !!draft.m.career;
+  const activeLeagueName = league?.leagueName || careerLeague || 'Premier Lig';
+  const isGuest = net.connected && net.role === 'guest';
   const selectableTeams = useMemo(() => {
     if (net.connected) return [net.myTeamIdx];
     if (isCareer) {
@@ -91,6 +103,29 @@ export const LineupView: React.FC<LineupViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {isCareer && !league && onChangeCareerLeague && (
+            <div className="inline-flex items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card)] p-1">
+              {(['Premier Lig', 'Bundesliga'] as const).map((lgName) => {
+                const selected = activeLeagueName === lgName;
+                return (
+                  <button
+                    key={lgName}
+                    type="button"
+                    disabled={isGuest}
+                    onClick={() => onChangeCareerLeague(lgName)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                      selected
+                        ? 'bg-[var(--pri)] text-white'
+                        : 'text-[var(--muted)] hover:text-white'
+                    }`}
+                  >
+                    <LeagueLogo league={lgName} size={15} />
+                    <span>{lgName}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {net.connected && !league && <OnlineReadyBadges net={net} phase="lineup" />}
           {!net.connected && (
             <button
@@ -104,21 +139,24 @@ export const LineupView: React.FC<LineupViewProps> = ({
           <button
             type="button"
             onClick={onProceed}
-            className="rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-4 py-2 text-xs font-bold text-white shadow-[0_6px_18px_-6px_rgba(34,197,94,0.6)] hover:bg-[#15803d]"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-4 py-2 text-xs font-bold text-white shadow-[0_6px_18px_-6px_rgba(34,197,94,0.6)] hover:bg-[#15803d]"
           >
-            {isCareer
-              ? league
-                ? 'Kaydet & Premier Lig Merkezine Dön →'
+            {isCareer && <LeagueLogo league={activeLeagueName} size={16} />}
+            <span>
+              {isCareer
+                ? league
+                  ? `Kaydet & ${activeLeagueName} Merkezine Dön →`
+                  : net.connected
+                  ? myReady
+                    ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
+                    : `Hazır Ol & ${activeLeagueName}'e Katıl →`
+                  : `${activeLeagueName}'e Katıl →`
                 : net.connected
                 ? myReady
                   ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
-                  : "Hazır Ol & Premier Lig'e Katıl →"
-                : "Premier Lig'e Katıl →"
-              : net.connected
-              ? myReady
-                ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
-                : 'Hazır Ol & Maça Geç →'
-              : 'Turnuva & Maça Geç →'}
+                  : 'Hazır Ol & Maça Geç →'
+                : 'Turnuva & Maça Geç →'}
+            </span>
           </button>
         </div>
       </div>

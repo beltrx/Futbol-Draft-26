@@ -2,7 +2,7 @@ import React from 'react';
 import { MODES } from '../data/database';
 import { isPeerReadyForPhase } from '../services/onlineNet';
 import type { GameModeId, NetStateSnapshot } from '../types/game';
-import { OnlineReadyBadges } from './ClubBadge';
+import { LeagueLogo, OnlineReadyBadges } from './ClubBadge';
 
 interface SetupViewProps {
   mode: GameModeId;
@@ -11,6 +11,7 @@ interface SetupViewProps {
   format: 'snake' | 'linear';
   strictPos: boolean;
   teamName: string;
+  careerLeague: string;
   err: string;
   net: NetStateSnapshot;
   onSelectMode: (modeId: GameModeId) => void;
@@ -19,6 +20,7 @@ interface SetupViewProps {
   onChangeFormat: (format: 'snake' | 'linear') => void;
   onChangeStrictPos: (strict: boolean) => void;
   onChangeTeamName: (name: string) => void;
+  onChangeCareerLeague: (league: string) => void;
   onContinueToClubs: () => void;
 }
 
@@ -29,6 +31,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
   format,
   strictPos,
   teamName,
+  careerLeague,
   err,
   net,
   onSelectMode,
@@ -37,6 +40,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
   onChangeFormat,
   onChangeStrictPos,
   onChangeTeamName,
+  onChangeCareerLeague,
   onContinueToClubs,
 }) => {
   const activeMode = MODES.find((m) => m.id === mode) || MODES[0];
@@ -50,15 +54,15 @@ export const SetupView: React.FC<SetupViewProps> = ({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-2xl space-y-2">
             <span className="inline-block rounded-md border border-[var(--pri-bright)]/40 bg-[#166534]/25 px-2.5 py-0.5 font-disp text-[11px] font-bold uppercase tracking-widest text-[var(--pri-bright)]">
-              2026-27 · GÜNCEL KADROLAR &amp; 38 HAFTALIK KARİYER
+              2026-27 · PREMIER LİG &amp; BUNDESLIGA KARİYER
             </span>
             <h1 className="text-2xl font-extrabold tracking-tight text-[var(--fg)] sm:text-3xl">
               Hayalindeki Kadroyu Kur, Sezonu Domine Et
             </h1>
             <p className="text-sm leading-relaxed text-[var(--muted)]">
-              77 dünya kulübünden oyuncularla draft yap, kendi takım armanı tasarla, 11+3 taktik
-              tahtanı kur ve 38 haftalık Premier Lig kariyerinde veya eleme turnuvasında şampiyonluğa
-              oyna.
+              91 dünya kulübünden oyuncularla draft yap, kendi takım armanı tasarla, 11+3 taktik
+              tahtanı kur ve Premier Lig (38 Hafta) veya Bundesliga (34 Hafta) kariyerinde
+              şampiyonluğa oyna.
             </p>
           </div>
           {net.connected && (
@@ -81,7 +85,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {MODES.map((m) => {
             const selected = m.id === mode;
             const disabledGuest = isGuest;
@@ -161,26 +165,34 @@ export const SetupView: React.FC<SetupViewProps> = ({
           </div>
 
           <div>
-            <label htmlFor="setup-opp-count" className="mb-1 block text-xs font-semibold text-[var(--muted)]">
-              {isCareer ? 'Kariyer Lig Yapısı' : 'Draft Takım Sayısı'}
+            <label htmlFor="setup-opp-count" className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-[var(--muted)]">
+              {isCareer && <LeagueLogo league={careerLeague} size={16} />}
+              <span>{isCareer ? 'Kariyer Ligi Seçimi' : 'Draft Takım Sayısı'}</span>
             </label>
-            <select
-              id="setup-opp-count"
-              disabled={isCareer || isGuest}
-              value={isCareer ? 1 : opp}
-              onChange={(e) => onChangeOpp(Number(e.target.value))}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--fg)] disabled:opacity-60"
-            >
-              {isCareer ? (
-                <option value={1}>20 Takım · 38 Hafta Premier Lig</option>
-              ) : (
-                <>
-                  <option value={1}>2 Takım (Doğrudan Final)</option>
-                  <option value={2}>3 Takım (Yarı Final + Final)</option>
-                  <option value={3}>4 Takım (2 Yarı Final + Final)</option>
-                </>
-              )}
-            </select>
+            {isCareer ? (
+              <select
+                id="setup-opp-count"
+                disabled={isGuest}
+                value={careerLeague}
+                onChange={(e) => onChangeCareerLeague(e.target.value)}
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--fg)] disabled:opacity-60"
+              >
+                <option value="Premier Lig">Premier Lig (20 Takım · 38 Hafta)</option>
+                <option value="Bundesliga">Bundesliga (18 Takım · 34 Hafta)</option>
+              </select>
+            ) : (
+              <select
+                id="setup-opp-count"
+                disabled={isGuest}
+                value={opp}
+                onChange={(e) => onChangeOpp(Number(e.target.value))}
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--fg)] disabled:opacity-60"
+              >
+                <option value={1}>2 Takım (Doğrudan Final)</option>
+                <option value={2}>3 Takım (Yarı Final + Final)</option>
+                <option value={3}>4 Takım (2 Yarı Final + Final)</option>
+              </select>
+            )}
           </div>
 
           <div>

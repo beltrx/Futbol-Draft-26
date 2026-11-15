@@ -8,7 +8,13 @@ import type {
   Team,
 } from '../types/game';
 import { getSortedStandings, getSuspendedPlayersForTeam } from '../utils/careerLogic';
-import { ClubLogo, MediaLogoBadge, OnlineReadyBadges, TeamIdentityBadge } from './ClubBadge';
+import {
+  ClubLogo,
+  LeagueLogo,
+  MediaLogoBadge,
+  OnlineReadyBadges,
+  TeamIdentityBadge,
+} from './ClubBadge';
 
 interface CareerHubViewProps {
   league: LeagueState;
@@ -120,15 +126,18 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
   const championTeam = championRow ? teams[championRow.teamIdx] : undefined;
 
   return (
-    <section aria-label="Premier Lig Kariyer Merkezi" className="space-y-4">
+    <section aria-label={`${league.leagueName} Kariyer Merkezi`} className="space-y-4">
       <div className="rounded-2xl border border-[var(--border)] bg-gradient-to-br from-[#0f151c] to-[#090c10] p-5 shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <TeamIdentityBadge team={userTeam} size={50} />
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded bg-[var(--pri)]/40 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[var(--pri-bright)]">
-                  {league.leagueName} · {league.maxWeeks} Haftalık Tam Sezon
+                <span className="inline-flex items-center gap-1.5 rounded bg-[var(--pri)]/40 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[var(--pri-bright)]">
+                  <LeagueLogo league={league.leagueName} size={16} />
+                  <span>
+                    {league.leagueName} · {league.maxWeeks} Haftalık Tam Sezon
+                  </span>
                 </span>
                 <span className="font-mono-tab text-xs font-bold text-amber-300">
                   {seasonOver
@@ -190,7 +199,7 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
               <TeamIdentityBadge team={championTeam} size={40} />
               <div>
                 <div className="text-xs font-bold uppercase tracking-wider text-amber-300">
-                  38 HAFTALIK SEZON ŞAMPİYONU
+                  {league.maxWeeks} HAFTALIK {league.leagueName.toUpperCase()} ŞAMPİYONU
                 </div>
                 <div className="text-lg font-extrabold text-white">
                   {championTeam.name} ({championRow.pts} Puan)
@@ -329,12 +338,13 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
                 const tm = teams[row.teamIdx];
                 const gd = row.gf - row.ga;
                 const isUser = !!tm?.isHuman;
+                const relegationStart = Math.max(15, standings.length - 2);
                 const zoneClass =
                   rank <= 4
                     ? 'border-l-4 border-l-emerald-500'
                     : rank <= 6
                     ? 'border-l-4 border-l-sky-500'
-                    : rank >= 18
+                    : rank >= relegationStart
                     ? 'border-l-4 border-l-red-500'
                     : 'border-l-4 border-l-transparent';
 

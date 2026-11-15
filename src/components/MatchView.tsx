@@ -66,7 +66,6 @@ export const MatchView: React.FC<MatchViewProps> = ({
     { label: 'İsabetli Şut', left: match.onTarget[0], right: match.onTarget[1], lVal: match.onTarget[0], rVal: match.onTarget[1] },
     { label: 'Kurtarış', left: match.saves[0], right: match.saves[1], lVal: match.saves[0], rVal: match.saves[1] },
     { label: 'Gol Beklentisi (xG)', left: match.xg[0].toFixed(2), right: match.xg[1].toFixed(2), lVal: match.xg[0], rVal: match.xg[1] },
-    { label: 'Performans (%)', left: `%${match.perfFactor[0]}`, right: `%${match.perfFactor[1]}`, lVal: match.perfFactor[0], rVal: match.perfFactor[1] },
     { label: 'Kırmızı Kart', left: match.redCards[0], right: match.redCards[1], lVal: match.redCards[0], rVal: match.redCards[1] },
   ];
 
@@ -122,9 +121,6 @@ export const MatchView: React.FC<MatchViewProps> = ({
               <div className="truncate font-disp text-lg font-extrabold text-white sm:text-xl">
                 {teamA?.name}
               </div>
-              <div className="font-mono-tab text-[11px] text-emerald-300">
-                Performans: %{match.perfFactor[0]}
-              </div>
             </div>
             <TeamIdentityBadge team={teamA} size={46} className="shrink-0" />
           </div>
@@ -151,9 +147,6 @@ export const MatchView: React.FC<MatchViewProps> = ({
             <div className="min-w-0">
               <div className="truncate font-disp text-lg font-extrabold text-white sm:text-xl">
                 {teamB?.name}
-              </div>
-              <div className="font-mono-tab text-[11px] text-emerald-300">
-                Performans: %{match.perfFactor[1]}
               </div>
             </div>
           </div>
@@ -233,7 +226,7 @@ export const MatchView: React.FC<MatchViewProps> = ({
                     ? myDoneReady
                       ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
                       : 'Yeni Haftaya Geçmek İçin Hazır Ol →'
-                    : 'Premier Lig Merkezine Dön →'}
+                    : `${league.leagueName || 'Premier Lig'} Merkezine Dön →`}
                 </button>
               )}
               {!isCareer &&
@@ -263,13 +256,13 @@ export const MatchView: React.FC<MatchViewProps> = ({
                 <button
                   type="button"
                   onClick={onBackAfterMatch}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--raised)] px-4 py-2 text-xs font-bold text-white"
+                  className="rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-5 py-2.5 text-xs font-bold text-white shadow-[0_6px_18px_-6px_rgba(34,197,94,0.65)]"
                 >
                   {net.connected
                     ? myDoneReady
                       ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
-                      : 'Turnuva Özetine Dönmek İçin Hazır Ol →'
-                    : 'Kadro & Turnuva Özetine Dön'}
+                      : 'Ana Menüye Dönmek İçin Hazır Ol →'
+                    : 'Ana Menüye Dön →'}
                 </button>
               )}
             </>

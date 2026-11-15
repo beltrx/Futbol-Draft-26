@@ -1,5 +1,6 @@
 import React from 'react';
-import { CLUB_CRESTS, CUSTOM_CLUB_LOGOS, MEDIA_LOGOS } from '../data/logos';
+import { CLUB_CRESTS, CUSTOM_CLUB_LOGOS, LEAGUE_LOGOS, MEDIA_LOGOS } from '../data/logos';
+import { LEAGUES_META } from '../data/database';
 import { isPeerReadyForPhase } from '../services/onlineNet';
 import type { NetStateSnapshot, Position, Team } from '../types/game';
 
@@ -314,4 +315,37 @@ export const OnlineReadyBadges: React.FC<{
     </div>
   );
 };
+
+export const LeagueLogo: React.FC<{
+  league: string;
+  size?: number;
+  className?: string;
+}> = ({ league, size = 24, className = '' }) => {
+  const logoSrc = LEAGUE_LOGOS[league];
+  const m = LEAGUES_META.find((l) => l.id === league);
+  if (logoSrc) {
+    return (
+      <span
+        className={`inline-flex items-center justify-center rounded-md bg-white p-0.5 shadow-sm shrink-0 ${className}`}
+        style={{ width: size, height: size }}
+      >
+        <img
+          src={logoSrc}
+          alt={league}
+          className="w-full h-full object-contain"
+          loading="lazy"
+        />
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`inline-flex items-center justify-center rounded-md bg-[var(--raised)] border border-[var(--border)] text-[10px] font-extrabold text-[var(--pri-bright)] shrink-0 ${className}`}
+      style={{ width: size, height: size }}
+    >
+      {(m?.name || league || 'LG').slice(0, 2).toUpperCase()}
+    </span>
+  );
+};
+
 

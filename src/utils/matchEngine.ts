@@ -69,19 +69,29 @@ export function pickGoalscorer(
   sentOffSet: Set<number> = new Set()
 ): LineupPlayer | null {
   const weights: [LineupPlayer, number][] = [];
-  const entries: [Position, number][] = [
-    ['FWD', 9.8],
-    ['MID', 2.0],
-    ['DEF', 0.3],
+  const posShares: [Position, number][] = [
+    ['FWD', 0.6],
+    ['MID', 0.3],
+    ['DEF', 0.1],
   ];
-  for (const [k, posMult] of entries) {
-    (L[k] || []).forEach((p) => {
-      if (sentOffSet.has(p.id)) return;
+  for (const [k, baseShare] of posShares) {
+    const activeGroup = (L[k] || []).filter((p) => !sentOffSet.has(p.id));
+    if (!activeGroup.length) continue;
+
+    const indivWeights = activeGroup.map((p) => {
       const rVal = p.effR != null ? p.effR : p.r;
-      const ratingFactor = Math.pow(Math.max(8, rVal - 62), 2.35);
-      const starForwardBoost =
-        k === 'FWD' && rVal >= 88 ? 1.75 : k === 'FWD' && rVal >= 85 ? 1.35 : 1.0;
-      weights.push([p, posMult * ratingFactor * starForwardBoost]);
+      const starBoost = rVal >= 89 ? 1.35 : rVal >= 85 ? 1.18 : 1.0;
+      return Math.pow(Math.max(6, rVal - 64), 2.1) * starBoost;
+    });
+    const sumIndiv = indivWeights.reduce((a, b) => a + b, 0) || 1;
+    const avgGroupR =
+      activeGroup.reduce((s, p) => s + (p.effR != null ? p.effR : p.r), 0) /
+      activeGroup.length;
+    const groupRatingMod = Math.pow(Math.max(0.65, (avgGroupR - 55) / 25), 1.35);
+    const effectiveGroupShare = baseShare * groupRatingMod;
+
+    activeGroup.forEach((p, idx) => {
+      weights.push([p, effectiveGroupShare * (indivWeights[idx] / sumIndiv)]);
     });
   }
   if (!weights.length) return (L.FWD && L.FWD[0]) || (L.MID && L.MID[0]) || null;
@@ -120,6 +130,93 @@ export function pickAssister(
   return weights[0][0];
 }
 
+export function rollMatchScoreline(
+  sA: SideEvaluation,
+  sB: SideEvaluation,
+  redCardMinutes: [number | null, number | null] = [null, null]
+): { goals: [number, number]; netAdvantage: number } {
+  const rawDiff = sA.avg - sB.avg;
+  const attEdgeA = sA.att - sB.def;
+  const attEdgeB = sB.att - sA.def;
+  const scaledDiff = Math.max(
+    -2.5,
+    Math.min(2.5, rawDiff * 0.2 + (attEdgeA - attEdgeB) * 0.06)
+  );
+  const matchDaySwing = (Math.random() - 0.5) * 3.5;
+  const redPenA = redCardMinutes[0] ? ((90 - redCardMinutes[0]) / 90) * 1.35 : 0;
+  const redPenB = redCardMinutes[1] ? ((90 - redCardMinutes[1]) / 90) * 1.35 : 0;
+
+  const netAdvantage = scaledDiff + matchDaySwing - redPenA + redPenB;
+  const absAdv = Math.abs(netAdvantage);
+
+  const isDraw = absAdv < 0.34 || (absAdv < 0.95 && Math.random() < 0.11);
+  if (isDraw) {
+    const drawScores: [number, number][] = [
+      [1, 1],
+      [1, 1],
+      [2, 2],
+      [0, 0],
+      [1, 1],
+      [2, 2],
+      [3, 3],
+    ];
+    return {
+      goals: drawScores[(Math.random() * drawScores.length) | 0],
+      netAdvantage,
+    };
+  }
+
+  const regWinner: 0 | 1 = netAdvantage >= 0 ? 0 : 1;
+  const winEval = regWinner === 0 ? sA : sB;
+  const loseEval = regWinner === 0 ? sB : sA;
+  const dom = absAdv + Math.max(0, (winEval.att - loseEval.def) * 0.1);
+
+  let pool: [number, number][];
+  if (dom >= 2.2) {
+    pool = [
+      [2, 0],
+      [3, 0],
+      [3, 1],
+      [3, 1],
+      [4, 0],
+      [4, 1],
+      [4, 2],
+      [5, 1],
+      [5, 0],
+      [3, 0],
+    ];
+  } else if (dom >= 1.25) {
+    pool = [
+      [2, 0],
+      [2, 1],
+      [2, 1],
+      [3, 1],
+      [3, 0],
+      [3, 2],
+      [4, 1],
+      [1, 0],
+    ];
+  } else {
+    pool = [
+      [1, 0],
+      [1, 0],
+      [2, 1],
+      [2, 0],
+      [2, 1],
+      [3, 2],
+      [3, 1],
+      [4, 2],
+    ];
+  }
+
+  const ch = [...pool[(Math.random() * pool.length) | 0]] as [number, number];
+  if (loseEval.def < 76.5 && Math.random() < 0.24) {
+    ch[0] = Math.min(5, ch[0] + 1);
+  }
+  const goals: [number, number] = regWinner === 0 ? [ch[0], ch[1]] : [ch[1], ch[0]];
+  return { goals, netAdvantage };
+}
+
 export function generateMatchPlan(
   _teamA: Team,
   _teamB: Team,
@@ -150,40 +247,8 @@ export function generateMatchPlan(
     }
   });
 
-  const rawDiff = sA.avg - sB.avg;
-  const compressedDiff = Math.max(-1.25, Math.min(1.25, rawDiff * 0.35));
-  const matchDaySwing = (Math.random() - 0.5) * 3.7;
-  const redPenA = redCardMinutes[0] ? ((90 - redCardMinutes[0]) / 90) * 1.45 : 0;
-  const redPenB = redCardMinutes[1] ? ((90 - redCardMinutes[1]) / 90) * 1.45 : 0;
-
-  const netAdvantage = compressedDiff + matchDaySwing - redPenA + redPenB;
-  const absAdv = Math.abs(netAdvantage);
-
-  let regGoals: [number, number] = [1, 1];
-  let goesToET = false;
-
-  if (absAdv < 0.55 || Math.random() < 0.24) {
-    const drawScores: [number, number][] = [
-      [1, 1],
-      [2, 2],
-      [1, 1],
-      [0, 0],
-    ];
-    regGoals = drawScores[(Math.random() * drawScores.length) | 0];
-    goesToET = allowExtraTime;
-  } else {
-    const regWinner = netAdvantage >= 0 ? 0 : 1;
-    const closePatterns: [number, number][] = [
-      [2, 1],
-      [1, 0],
-      [3, 2],
-      [2, 0],
-      [3, 1],
-      [2, 1],
-    ];
-    const ch = closePatterns[(Math.random() * closePatterns.length) | 0];
-    regGoals = regWinner === 0 ? [ch[0], ch[1]] : [ch[1], ch[0]];
-  }
+  const { goals: regGoals, netAdvantage } = rollMatchScoreline(sA, sB, redCardMinutes);
+  const goesToET = regGoals[0] === regGoals[1] && allowExtraTime;
 
   const usedMinutes = new Set<number | null>([45, 90, 105, 120, redCardMinutes[0], redCardMinutes[1]]);
   function pickMinute(minStart: number, minEnd: number): number {
@@ -464,7 +529,7 @@ export function stepMatchMinute(m: MatchState, minNum: number, teams: Team[]): v
         min: minNum,
         isGoal: false,
         isRed: true,
-        text: `KIRMIZI KART! ${ev.player.n} (${names[i]}) oyun dışı kaldı. Takım performansı %${m.perfFactor[i]} seviyesine geriledi.`,
+        text: `KIRMIZI KART! ${ev.player.n} (${names[i]}) oyun dışı kaldı.`,
       });
     } else if (ev.type === 'save' && ev.player) {
       m.shots[i]++;
@@ -608,7 +673,7 @@ export function finalizeMatchState(
       min: 90,
       isGoal: true,
       isRed: false,
-      text: `Lig Maçı Tamamlandı: ${A.name} ${m.sc[0]} - ${m.sc[1]} ${B.name} · Diğer 9 Premier Lig maçı da simüle edildi.`,
+      text: `Lig Maçı Tamamlandı: ${A.name} ${m.sc[0]} - ${m.sc[1]} ${B.name} · Haftanın diğer lig maçları da simüle edildi.`,
     });
     return;
   }

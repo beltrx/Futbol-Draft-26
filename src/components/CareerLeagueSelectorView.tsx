@@ -1,17 +1,18 @@
 import React from 'react';
 import { CAREER_LEAGUES_PREVIEW } from '../data/database';
+import { LeagueLogo } from './ClubBadge';
 
 interface CareerLeagueSelectorViewProps {
   teamName: string;
   isGuestWaiting?: boolean;
-  onSelectPremierLeague: () => void;
+  onSelectLeague: (leagueName: string) => void;
   onBackToLineup: () => void;
 }
 
 export const CareerLeagueSelectorView: React.FC<CareerLeagueSelectorViewProps> = ({
   teamName,
   isGuestWaiting = false,
-  onSelectPremierLeague,
+  onSelectLeague,
   onBackToLineup,
 }) => {
   return (
@@ -25,8 +26,8 @@ export const CareerLeagueSelectorView: React.FC<CareerLeagueSelectorViewProps> =
             {teamName} İçin Mücadele Edeceğin Ligi Seç
           </h1>
           <p className="text-xs text-[var(--muted)]">
-            Premier Lig tam 20 takımlı kadro havuzuyla 38 haftalık çift devreli tam sezon olarak
-            hazır.
+            Premier Lig (20 takım · 38 hafta) ve Bundesliga (18 takım · 34 hafta) çift devreli tam
+            sezon olarak hazır.
           </p>
         </div>
 
@@ -51,8 +52,9 @@ export const CareerLeagueSelectorView: React.FC<CareerLeagueSelectorViewProps> =
           >
             <div>
               <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]">
-                  {lg.country}
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]">
+                  <LeagueLogo league={lg.id} size={20} />
+                  <span>{lg.country}</span>
                 </span>
                 <span
                   className={`rounded px-2 py-0.5 text-[10px] font-bold ${
@@ -73,12 +75,12 @@ export const CareerLeagueSelectorView: React.FC<CareerLeagueSelectorViewProps> =
                 <button
                   type="button"
                   disabled={isGuestWaiting}
-                  onClick={onSelectPremierLeague}
+                  onClick={() => onSelectLeague(lg.id)}
                   className="w-full rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-4 py-2.5 text-xs font-bold text-white shadow-[0_6px_18px_-6px_rgba(34,197,94,0.65)] transition hover:bg-[#15803d] disabled:opacity-50"
                 >
                   {isGuestWaiting
                     ? 'Oda Kurucusu Ligi Başlatıyor...'
-                    : "Premier Lig'i Başlat →"}
+                    : `${lg.name}'i Başlat →`}
                 </button>
               ) : (
                 <button

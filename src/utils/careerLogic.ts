@@ -17,7 +17,7 @@ import {
   enforceHealthyStartersForTeam,
   ensureTeamLineup,
 } from './lineupLogic';
-import { pickAssister, pickGoalscorer, side } from './matchEngine';
+import { pickAssister, pickGoalscorer, rollMatchScoreline, side } from './matchEngine';
 
 export interface RivalNewsTemplate {
   id: string;
@@ -181,6 +181,60 @@ export const PREMIER_STAR_NEWS_TEMPLATES: RivalNewsTemplate[] = [
     source: 'Nottingham Post',
     title: "Nottingham Forest'ta Morgan Gibbs-White Yorgunluk Sinyalleri Veriyor!",
     body: "Sezon başından beri neredeyse her maçta 90 dakika sahada kalan Morgan Gibbs-White'ın kondisyon değerlerinde düşüş tespit edildi.",
+  },
+  {
+    id: 'bay_kane_fire',
+    club: 'Bayern Munchen',
+    player: 'Harry Kane',
+    delta: 2,
+    source: 'Kicker · Allianz Arena',
+    title: 'Harry Kane Säbener Straße İdmanlarında Durdurulamıyor!',
+    body: "Bayern Münih'in gol makinesi Harry Kane, ekstra bitiricilik idmanlarıyla Bundesliga savunmalarının korkulu rüyası olmaya devam ediyor.",
+  },
+  {
+    id: 'bay_musiala_magic',
+    club: 'Bayern Munchen',
+    player: 'Jamal Musiala',
+    delta: 2,
+    source: 'Bild · Bundesliga Yıldızı',
+    title: 'Jamal Musiala Dar Alanda Rakiplerini Çaresiz Bırakıyor!',
+    body: 'Alman futbolunun süper yeteneği Jamal Musiala, çalımları ve kilit paslarıyla Bayern hücumunun merkezinde parlıyor.',
+  },
+  {
+    id: 'bvb_guirassy_surge',
+    club: 'Borussia Dortmund',
+    player: 'Serhou Guirassy',
+    delta: 2,
+    source: 'Ruhr Nachrichten · Dortmund',
+    title: "Signal Iduna Park'ta Serhou Guirassy Fırtınası!",
+    body: "Borussia Dortmund'un golcüsü Serhou Guirassy, ceza sahası içindeki fiziksel üstünlüğüyle formunun zirvesine çıktı.",
+  },
+  {
+    id: 'b04_grimaldo_boost',
+    club: 'Bayer Leverkusen',
+    player: 'Alejandro Grimaldo',
+    delta: 2,
+    source: 'Kicker · Taktik Raporu',
+    title: 'Alejandro Grimaldo Duran Toplarla Maç Çözmeye Devam Ediyor!',
+    body: "Bayer Leverkusen'in İspanyol sol kanat beki Grimaldo, frikik golleri ve asistleriyle takımını sırtlıyor.",
+  },
+  {
+    id: 'vfb_undav_stiller',
+    club: 'Stuttgart',
+    player: 'Deniz Undav',
+    delta: 2,
+    source: 'Stuttgarter Zeitung',
+    title: "Stuttgart'ta Deniz Undav ve Angelo Stiller Uyumu Göz Kamaştırıyor!",
+    body: "Stuttgart hücum hattında Deniz Undav'ın bitiriciliği ve orta sahada Stiller'in pas vizyonu rakiplere zor anlar yaşatıyor.",
+  },
+  {
+    id: 'sge_canuzun_star',
+    club: 'Eintracht Frankfurt',
+    player: 'Can Uzun',
+    delta: 2,
+    source: 'Frankfurter Allgemeine',
+    title: "Frankfurt'ta Genç Yıldız Can Uzun Ayakta Alkışlanıyor!",
+    body: "Eintracht Frankfurt formasıyla müthiş bir çıkış yakalayan milli yıldız Can Uzun, uzaktan şutları ve oyun zekasıyla haftanın gündemine oturdu.",
   },
 ];
 
@@ -469,22 +523,33 @@ export function calcClubStrength(clubName: string): number {
 }
 
 /**
- * Selects Premier Lig AI rival clubs so that `humanCount + AI clubs = 20`.
- * Drops the lowest-rated Premier Lig clubs first (e.g. Hull City for 1P, Hull City & Ipswich Town for 2P).
+ * Selects Career League AI rival clubs so that:
+ * - Premier Lig: `humanCount + AI clubs = 20` (38 weeks)
+ * - Bundesliga: `humanCount + AI clubs = 18` (34 weeks)
+ * Drops the lowest-rated clubs in that league first (e.g. Hull City / Ipswich Town in PL, Paderborn / Elversberg in Bundesliga).
  */
-export function selectPremierLeagueAiClubs(
+export function selectCareerAiClubs(
+  leagueName: string,
   humanCount: number,
   excludeTeamNames: string[] = []
 ): string[] {
   const excluded = new Set(excludeTeamNames.map((n) => n.trim().toLowerCase()));
-  const plClubs = ALL_CLUBS.filter(
-    (c) => CLUB_TO_LEAGUE[c] === 'Premier Lig' && !excluded.has(c.toLowerCase())
+  const leagueClubs = ALL_CLUBS.filter(
+    (c) => CLUB_TO_LEAGUE[c] === leagueName && !excluded.has(c.toLowerCase())
   );
-  const targetAiCount = Math.max(0, 20 - humanCount);
-  if (plClubs.length <= targetAiCount) return plClubs;
-  const sortedAsc = [...plClubs].sort((a, b) => calcClubStrength(a) - calcClubStrength(b));
-  const dropCount = plClubs.length - targetAiCount;
+  const totalTeamsTarget = leagueName === 'Bundesliga' ? 18 : 20;
+  const targetAiCount = Math.max(0, totalTeamsTarget - humanCount);
+  if (leagueClubs.length <= targetAiCount) return leagueClubs;
+  const sortedAsc = [...leagueClubs].sort((a, b) => calcClubStrength(a) - calcClubStrength(b));
+  const dropCount = leagueClubs.length - targetAiCount;
   return sortedAsc.slice(dropCount);
+}
+
+export function selectPremierLeagueAiClubs(
+  humanCount: number,
+  excludeTeamNames: string[] = []
+): string[] {
+  return selectCareerAiClubs('Premier Lig', humanCount, excludeTeamNames);
 }
 
 export function selectPremierLeagueRivalClubs(excludeTeamName: string): string[] {
@@ -505,7 +570,8 @@ export function initCareerLeague(
     }
   );
 
-  const aiClubs = selectPremierLeagueAiClubs(
+  const aiClubs = selectCareerAiClubs(
+    leagueName,
     humanTeams.length,
     humanTeams.map((t) => t.name)
   );
@@ -523,7 +589,7 @@ export function initCareerLeague(
     pts: 0,
   }));
 
-  const maxWeeks = (allTeams.length - 1) * 2; // 38 weeks for 20 teams
+  const maxWeeks = (allTeams.length - 1) * 2; // 38 weeks for 20 teams (PL), 34 weeks for 18 teams (Bundesliga)
   const humanNamesLabel = humanTeams.map((t) => t.name).join(' ve ');
 
   const teamCareer: Record<number, TeamCareerState> = {};
@@ -563,10 +629,10 @@ export function initCareerLeague(
     newsFeed: [
       {
         week: 1,
-        source: 'Premier Lig Medya Merkezi',
+        source: `${leagueName} Medya Merkezi`,
         teamIdx: 0,
-        title: '2026-27 Premier Lig 38 Haftalık Tam Sezon Başlıyor!',
-        body: `20 takımlı 38 haftalık çift devreli maratonda ${humanNamesLabel} yeni kurulan kadrosuyla şampiyonluk yarışına katılıyor. İç saha ve deplasman rövanşlarıyla dolu uzun sezonda kart cezaları ve form grafiği belirleyici olacak.`,
+        title: `2026-27 ${leagueName} ${maxWeeks} Haftalık Tam Sezon Başlıyor!`,
+        body: `${allTeams.length} takımlı ${maxWeeks} haftalık çift devreli maratonda ${humanNamesLabel} yeni kurulan kadrosuyla şampiyonluk yarışına katılıyor. İç saha ve deplasman rövanşlarıyla dolu uzun sezonda kart cezaları ve form grafiği belirleyici olacak.`,
       },
     ],
     tab: 'standings',
@@ -719,41 +785,9 @@ export function simulateBackgroundLeagueMatch(
   const sA = side(tA, lg, true);
   const sB = side(tB, lg, true);
 
-  const rawDiff = sA.avg - sB.avg;
-  const compDiff = Math.max(-1.25, Math.min(1.25, rawDiff * 0.35));
-  const swing = (Math.random() - 0.5) * 3.6;
-  const adv = compDiff + swing;
-
-  let gA = 1;
-  let gB = 1;
-  if (Math.abs(adv) < 0.52) {
-    const draws: [number, number][] = [
-      [1, 1],
-      [0, 0],
-      [2, 2],
-      [1, 1],
-    ];
-    const d = draws[(Math.random() * draws.length) | 0];
-    gA = d[0];
-    gB = d[1];
-  } else {
-    const winScores: [number, number][] = [
-      [2, 1],
-      [1, 0],
-      [2, 0],
-      [3, 1],
-      [3, 2],
-      [2, 1],
-    ];
-    const w = winScores[(Math.random() * winScores.length) | 0];
-    if (adv >= 0) {
-      gA = w[0];
-      gB = w[1];
-    } else {
-      gA = w[1];
-      gB = w[0];
-    }
-  }
+  const {
+    goals: [gA, gB],
+  } = rollMatchScoreline(sA, sB);
 
   mObj.done = true;
   mObj.sc = [gA, gB];
@@ -855,7 +889,8 @@ export function generateChampionsLeagueHeadline(completedWeek: number): CareerNe
 export function generateDynamicMatchHeadline(
   teams: Team[],
   roundMatches: LeagueFixture[],
-  completedWeek: number
+  completedWeek: number,
+  leagueName = 'Premier Lig'
 ): CareerNewsItem | null {
   if (!roundMatches || !roundMatches.length) return null;
   const aiMatches = roundMatches.filter(
@@ -880,7 +915,7 @@ export function generateDynamicMatchHeadline(
   if (gA === gB) {
     return {
       week: completedWeek,
-      source: 'Sky Sports · Premier Lig Özeti',
+      source: `Sky Sports · ${leagueName} Özeti`,
       clubLogoName: tA.name,
       teamIdx: pick.a,
       title: `${tA.name} ile ${tB.name} Yenişemedi: ${gA}-${gB}!`,
@@ -901,7 +936,7 @@ export function generateDynamicMatchHeadline(
     clubLogoName: winTeam.name,
     teamIdx: winIdx,
     title: `${winTeam.name}, ${loseTeam.name} Karşısında ${winGoals}-${loseGoals} Galip!`,
-    body: `Premier Lig'in ${completedWeek}. haftasında ${winTeam.name}, etkili bir oyun sergileyerek ${loseTeam.name} engelini ${winGoals}-${loseGoals} ile geçti ve hanesine kritik 3 puan yazdırdı.`,
+    body: `${leagueName} ${completedWeek}. haftasında ${winTeam.name}, etkili bir oyun sergileyerek ${loseTeam.name} engelini ${winGoals}-${loseGoals} ile geçti ve hanesine kritik 3 puan yazdırdı.`,
   };
 }
 
@@ -931,7 +966,12 @@ export function triggerWeeklyTeamNews(
   roundMatches: LeagueFixture[],
   completedWeek: number
 ): void {
-  const matchNews = generateDynamicMatchHeadline(teams, roundMatches, completedWeek);
+  const matchNews = generateDynamicMatchHeadline(
+    teams,
+    roundMatches,
+    completedWeek,
+    lg.leagueName || 'Premier Lig'
+  );
   if (matchNews) {
     lg.newsFeed.unshift(matchNews);
   }
@@ -1402,7 +1442,7 @@ export function buildCareerEventsCatalog(
       teamIdx,
       tag: 'Sponsorluk Masası · Ticari Anlaşma',
       title: "Etihad Airways, Qatar Airways ve Emirates'ten Forma Sponsorluğu Teklifi!",
-      desc: `Kulübünün Premier Lig'deki yükselişi sonrası 3 dev havayolu şirketi göğüs sponsorluğu için teklif sundu: Qatar Airways en yüksek nakit paketi verirken yoğun tanıtım turu istiyor; Etihad Airways dengeli bütçe ve tesis desteği sunuyor; Emirates ise şampiyonluk primli prestij paketi öneriyor.`,
+      desc: `Kulübünün ${lg.leagueName}'deki yükselişi sonrası 3 dev havayolu şirketi göğüs sponsorluğu için teklif sundu: Qatar Airways en yüksek nakit paketi verirken yoğun tanıtım turu istiyor; Etihad Airways dengeli bütçe ve tesis desteği sunuyor; Emirates ise şampiyonluk primli prestij paketi öneriyor.`,
       choices: [
         makeChoice('sponsor', 0, 'Qatar Airways ile İmzala (+32 M€ Nakit · Tanıtım Turu: -%2 Kondisyon)'),
         makeChoice('sponsor', 1, 'Etihad Airways ile İmzala (+24 M€ Nakit · Tesis Desteği: +%2 Performans)'),
@@ -1541,7 +1581,7 @@ export function buildCareerEventsCatalog(
       teamIdx,
       tag: 'Soyunma Odası · Prim Görüşmesi',
       title: 'Takım Kaptanlarından Şampiyonluk Primi Talebi!',
-      desc: 'Takım kaptanları, zorlu Premier Lig fikstürü öncesinde yönetimden maç başı ve şampiyonluk primlerinin güncellenmesini talep etti.',
+      desc: `Takım kaptanları, zorlu ${lg.leagueName} fikstürü öncesinde yönetimden maç başı ve şampiyonluk primlerinin güncellenmesini talep etti.`,
       choices: [
         makeChoice('bonus_revision', 0, 'Prim Paketi Güncellemesini Onayla (-8 M€ · +%5 Şampiyonluk Hırsı)'),
         makeChoice('bonus_revision', 1, 'Sezon Sonuna Kadar Mevcut Sözleşmeleri Koru (-%2 Moral)'),
@@ -1563,7 +1603,7 @@ export function buildCareerEventsCatalog(
       teamIdx,
       tag: 'Sağlık Kurulu · Yoğun Fikstür',
       title: 'Kriyoterapi ve Rejenerasyon Merkezi Yatırımı!',
-      desc: 'Sağlık ekibi, üst üste oynanan sert Premier Lig maçları sonrası kas yorgunluğunu azaltacak yeni rejenerasyon üniteleri talep ediyor.',
+      desc: `Sağlık ekibi, üst üste oynanan sert ${lg.leagueName} maçları sonrası kas yorgunluğunu azaltacak yeni rejenerasyon üniteleri talep ediyor.`,
       choices: [
         makeChoice('recovery_protocol', 0, 'Rejenerasyon Ünitelerini Al (-6 M€ · Sakatlık Süreleri -1 Hafta & +%3 Form)'),
         makeChoice('recovery_protocol', 1, 'Mevcut Fizyoterapi Programıyla Devam Et (Maliyetsiz)'),
