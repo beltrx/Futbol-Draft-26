@@ -1002,8 +1002,18 @@ export default function App() {
       }
 
       const autostart = params.get('autostart');
-      if (autostart === '1' || autostart === 'career' || autostart === 'bundesliga') {
-        const startLeague = autostart === 'bundesliga' ? 'Bundesliga' : 'Premier Lig';
+      if (
+        autostart === '1' ||
+        autostart === 'career' ||
+        autostart === 'bundesliga' ||
+        autostart === 'seriea'
+      ) {
+        const startLeague =
+          autostart === 'bundesliga'
+            ? 'Bundesliga'
+            : autostart === 'seriea'
+            ? 'Serie A'
+            : 'Premier Lig';
         const res = buildDraftState({
           mode: 'career',
           leagues: new Set(MODERN_LEAGUES),
@@ -1633,6 +1643,8 @@ export default function App() {
                 nextL = new Set(['Premier Lig']);
               } else if (preset === 'bundesliga') {
                 nextL = new Set(['Bundesliga']);
+              } else if (preset === 'seriea') {
+                nextL = new Set(['Serie A']);
               } else if (preset === 'superlig') {
                 nextL = new Set(['Trendyol Süper Lig']);
               } else if (preset === 'iconic') {

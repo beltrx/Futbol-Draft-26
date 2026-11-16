@@ -26,8 +26,8 @@ export const CareerLeagueSelectorView: React.FC<CareerLeagueSelectorViewProps> =
             {teamName} İçin Mücadele Edeceğin Ligi Seç
           </h1>
           <p className="text-xs text-[var(--muted)]">
-            Premier Lig (20 takım · 38 hafta) ve Bundesliga (18 takım · 34 hafta) çift devreli tam
-            sezon olarak hazır.
+            Premier Lig (20 takım · 38 hafta), Bundesliga (18 takım · 34 hafta) ve Serie A (20
+            takım · 38 hafta) çift devreli tam sezon olarak hazır.
           </p>
         </div>
 

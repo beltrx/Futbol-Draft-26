@@ -20,7 +20,7 @@ interface ClubSelectViewProps {
   net: NetStateSnapshot;
   onToggleLeague: (lgId: string) => void;
   onToggleClub: (club: string) => void;
-  onSelectPreset: (preset: 'all' | 'pl' | 'bundesliga' | 'superlig' | 'iconic' | 'clear') => void;
+  onSelectPreset: (preset: 'all' | 'pl' | 'bundesliga' | 'seriea' | 'superlig' | 'iconic' | 'clear') => void;
   onBack: () => void;
   onStartDraft: () => void;
 }
@@ -149,6 +149,14 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
                   >
                     <LeagueLogo league="Bundesliga" size={14} />
                     <span>Bundesliga</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectPreset('seriea')}
+                    className="inline-flex items-center gap-1.5 rounded border border-[var(--border)] bg-[var(--raised)] px-2.5 py-1 text-xs font-semibold hover:bg-[var(--accent)]"
+                  >
+                    <LeagueLogo league="Serie A" size={14} />
+                    <span>Serie A</span>
                   </button>
                   <button
                     type="button"

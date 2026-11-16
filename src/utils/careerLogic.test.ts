@@ -297,7 +297,7 @@ test('Ratings are hidden from all rival news badges and career event texts, and 
   assert.equal((modeIds as Set<string>).has('club'), false);
   assert.equal((modeIds as Set<string>).has('iconic'), false);
 
-  const expectedSvgClubs = [
+  const expectedCustomLogoClubs = [
     'Flamengo',
     'West Ham United',
     'Freiburg',
@@ -326,12 +326,22 @@ test('Ratings are hidden from all rival news badges and career event texts, and 
     'Elversberg',
     'Paderborn',
     'Bologna',
+    'Sassuolo',
+    'Torino',
+    'Genoa',
+    'Udinese',
+    'Parma',
+    'Cagliari',
+    'Venezia',
+    'Frosinone',
+    'Monza',
+    'Lecce',
+    'Strasbourg',
   ];
-  for (const club of expectedSvgClubs) {
+  for (const club of expectedCustomLogoClubs) {
     assert.ok(
-      CUSTOM_CLUB_LOGOS[club]?.startsWith('data:image/svg+xml') ||
-        CUSTOM_CLUB_LOGOS[club]?.endsWith('.svg'),
-      `Expected SVG logo for ${club}`
+      CUSTOM_CLUB_LOGOS[club]?.startsWith('data:image/'),
+      `Expected embedded logo for ${club}`
     );
   }
 });
@@ -368,6 +378,48 @@ test('Bundesliga Career mode builds 18 teams / 34 weeks, drops Paderborn (1P) & 
   assert.equal(teams.some((t) => t.name === 'Bologna'), false);
   assert.equal(teams.some((t) => t.name === 'Paderborn'), false);
   assert.equal(teams.some((t) => t.name === 'Bayern Munchen'), true);
+});
+
+test('Serie A Career mode builds 20 teams / 38 weeks, drops Frosinone (1P), and keeps Strasbourg in Ligue 1', () => {
+  assert.equal(CLUB_TO_LEAGUE['Strasbourg'], 'Ligue 1');
+  assert.equal(CLUB_TO_LEAGUE['Sassuolo'], 'Serie A');
+  assert.equal(CLUB_TO_LEAGUE['Torino'], 'Serie A');
+  assert.equal(CLUB_TO_LEAGUE['Genoa'], 'Serie A');
+  assert.equal(CLUB_TO_LEAGUE['Udinese'], 'Serie A');
+  assert.equal(CLUB_TO_LEAGUE['Parma'], 'Serie A');
+  assert.equal(CLUB_TO_LEAGUE['Cagliari'], 'Serie A');
+  assert.equal(CLUB_TO_LEAGUE['Venezia'], 'Serie A');
+  assert.equal(CLUB_TO_LEAGUE['Frosinone'], 'Serie A');
+  assert.equal(CLUB_TO_LEAGUE['Monza'], 'Serie A');
+  assert.equal(CLUB_TO_LEAGUE['Lecce'], 'Serie A');
+
+  const { state } = buildDraftState({
+    mode: 'career',
+    leagues: new Set(['Serie A']),
+    clubs: new Set(),
+    opp: 1,
+    humanCount: 1,
+    format: 'snake',
+    strictPos: true,
+  });
+  assert.ok(state);
+  while (state.k < state.order.length) {
+    const p = chooseCpuPlayer(state, state.teams[0], true)!;
+    state.teams[0].picks.push(p);
+    state.teams[0].spent += cost(p);
+    state.taken.add(p.id);
+    state.k++;
+  }
+
+  const { teams, league } = initCareerLeague(state.teams, 360, 'Serie A');
+  assert.equal(league.leagueName, 'Serie A');
+  assert.equal(teams.length, 20);
+  assert.equal(league.maxWeeks, 38);
+  assert.equal(league.schedule.length, 38);
+  assert.equal(teams.some((t) => t.name === 'Strasbourg'), false);
+  assert.equal(teams.some((t) => t.name === 'Frosinone'), false);
+  assert.equal(teams.some((t) => t.name === 'Inter'), true);
+  assert.equal(teams.some((t) => t.name === 'Sassuolo'), true);
 });
 
 test('buildPitchRowsForTeam orders rows from FWD (top) down to GK (bottom) across all formations', () => {

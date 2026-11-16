@@ -54,15 +54,15 @@ export const SetupView: React.FC<SetupViewProps> = ({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-2xl space-y-2">
             <span className="inline-block rounded-md border border-[var(--pri-bright)]/40 bg-[#166534]/25 px-2.5 py-0.5 font-disp text-[11px] font-bold uppercase tracking-widest text-[var(--pri-bright)]">
-              2026-27 · PREMIER LİG &amp; BUNDESLIGA KARİYER
+              2026-27 · PREMIER LİG, BUNDESLIGA &amp; SERIE A KARİYER
             </span>
             <h1 className="text-2xl font-extrabold tracking-tight text-[var(--fg)] sm:text-3xl">
               Hayalindeki Kadroyu Kur, Sezonu Domine Et
             </h1>
             <p className="text-sm leading-relaxed text-[var(--muted)]">
-              91 dünya kulübünden oyuncularla draft yap, kendi takım armanı tasarla, 11+3 taktik
-              tahtanı kur ve Premier Lig (38 Hafta) veya Bundesliga (34 Hafta) kariyerinde
-              şampiyonluğa oyna.
+              102 dünya kulübünden oyuncularla draft yap, kendi takım armanı tasarla, 11+3 taktik
+              tahtanı kur ve Premier Lig (38 Hafta), Bundesliga (34 Hafta) veya Serie A (38 Hafta)
+              kariyerinde şampiyonluğa oyna.
             </p>
           </div>
           {net.connected && (
@@ -179,6 +179,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
               >
                 <option value="Premier Lig">Premier Lig (20 Takım · 38 Hafta)</option>
                 <option value="Bundesliga">Bundesliga (18 Takım · 34 Hafta)</option>
+                <option value="Serie A">Serie A (20 Takım · 38 Hafta)</option>
               </select>
             ) : (
               <select
