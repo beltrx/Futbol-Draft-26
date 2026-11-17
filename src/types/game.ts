@@ -90,6 +90,7 @@ export interface WheelState {
   selectedClub: string | null;
   offeredPlayers: Player[];
   jokers: number;
+  jokersByTeam: Record<number, number>;
 }
 
 export interface FormationRowDef {

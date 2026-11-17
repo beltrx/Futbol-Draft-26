@@ -225,6 +225,7 @@ export function buildDraftState(
   if (params.clubs.size) {
     pool = pool.filter((p) => params.clubs.has(p.c));
   }
+  pool = [...pool].sort((a, b) => a.n.localeCompare(b.n, 'tr'));
   if (m.clubs === 'required' && params.clubs.size < 2) {
     return {
       state: null,
@@ -341,6 +342,33 @@ export function getWheelClubsForTurn(
   return clubs.length
     ? clubs
     : [...new Set(g.pool.filter((p) => !g.taken.has(p.id)).map((p) => p.c))];
+}
+
+export function pickRandomWheelPlayersForClub(
+  g: DraftState,
+  t: Team,
+  club: string,
+  strictPos = true,
+  count = 4
+): Player[] {
+  const eligible = g.pool
+    .filter((pl) => pl.c === club && !g.taken.has(pl.id))
+    .filter((pl) => canPickPlayer(g, t, pl, strictPos));
+  const source =
+    eligible.length > 0
+      ? [...eligible]
+      : g.pool.filter((pl) => pl.c === club && !g.taken.has(pl.id));
+
+  for (let i = source.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = source[i];
+    source[i] = source[j];
+    source[j] = tmp;
+  }
+
+  return source
+    .slice(0, count)
+    .sort((a, b) => a.n.localeCompare(b.n, 'tr'));
 }
 
 export function chooseCpuPlayer(

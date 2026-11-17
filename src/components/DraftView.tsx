@@ -130,12 +130,13 @@ export const DraftView: React.FC<DraftViewProps> = ({
       .filter((p) => !clubFilter || p.c === clubFilter)
       .filter((p) => !posFilter || p.pos === posFilter)
       .filter((p) => !q || p.n.toLowerCase().includes(q) || p.c.toLowerCase().includes(q))
-      .sort((a, b) => b.r - a.r);
+      .sort((a, b) => a.n.localeCompare(b.n, 'tr'));
   }, [draft.pool, draft.taken, leagueFilter, clubFilter, posFilter, searchQ]);
 
   const counts = activeTeam ? posCountsOf(activeTeam) : { GK: 0, DEF: 0, MID: 0, FWD: 0 };
   const budgetLeft =
     draft.m.budget && activeTeam ? draft.m.budget - activeTeam.spent : null;
+  const activeTeamJokers = wheel.jokersByTeam?.[activeTeamIdx] ?? wheel.jokers ?? 3;
 
   return (
     <section aria-label="Draft Masası" className="space-y-4">
@@ -287,12 +288,30 @@ export const DraftView: React.FC<DraftViewProps> = ({
               </button>
               <button
                 type="button"
-                disabled={!isMyTurn || wheel.spinning || !wheel.selectedClub || wheel.jokers <= 0}
+                disabled={!isMyTurn || wheel.spinning || !wheel.selectedClub || activeTeamJokers <= 0}
                 onClick={() => onSpinWheel(true)}
                 className="rounded-lg border border-amber-400/50 bg-amber-900/50 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-45"
               >
-                Joker Yeniden Çevir ({wheel.jokers})
+                Joker Yeniden Çevir ({activeTeamJokers})
               </button>
+            </div>
+
+            <div className="mt-2 flex flex-wrap justify-center gap-1.5 text-[11px] text-[var(--muted)]">
+              {draft.teams
+                .map((tm, idx) => ({ tm, idx }))
+                .filter(({ tm }) => tm.isHuman)
+                .map(({ tm, idx }) => (
+                  <span
+                    key={idx}
+                    className={`rounded border px-2 py-0.5 font-mono-tab ${
+                      idx === activeTeamIdx
+                        ? 'border-amber-400/50 bg-amber-950/40 text-amber-200'
+                        : 'border-[var(--border)] bg-[var(--card)] text-[var(--muted)]'
+                    }`}
+                  >
+                    {tm.name} Joker: {wheel.jokersByTeam?.[idx] ?? 3}
+                  </span>
+                ))}
             </div>
           </div>
 
@@ -302,9 +321,12 @@ export const DraftView: React.FC<DraftViewProps> = ({
                 <span className="inline-flex items-center gap-2">
                   <ClubLogo club={wheel.selectedClub} size={22} />
                   Çıkan Kulüp: <strong className="text-[var(--pri-bright)]">{wheel.selectedClub}</strong>
+                  <span className="text-xs font-normal text-[var(--muted)]">
+                    (Rastgele {wheel.offeredPlayers.length} Oyuncu)
+                  </span>
                 </span>
               ) : (
-                'Çarktan Çıkacak Takımdan Oyuncu Seç'
+                'Çarktan Çıkacak Takımdan Rastgele 4 Oyuncu Gelir'
               )}
             </h2>
 
@@ -342,163 +364,172 @@ export const DraftView: React.FC<DraftViewProps> = ({
               </div>
             ) : (
               <p className="text-xs text-[var(--muted)]">
-                Sıra sendeyken çarkı çevir; çıkan kulübün kadrosundan bir oyuncuyu kadrona kat.
+                Sıra sendeyken çarkı çevir; çıkan kulüpten rastgele gelen 4 oyuncudan birini kadrona kat.
               </p>
             )}
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <label htmlFor="draft-search" className="sr-only">
-              Oyuncu veya kulüp ara
-            </label>
-            <input
-              id="draft-search"
-              type="text"
-              value={searchQ}
-              onChange={(e) => setSearchQ(e.target.value)}
-              placeholder="Oyuncu veya kulüp ara..."
-              className="min-w-[180px] flex-1 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-xs text-[var(--fg)] focus:border-[var(--pri-bright)] focus:outline-none"
-            />
+      <div className={isWheelMode ? 'grid grid-cols-1 gap-4' : 'grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]'}>
+        {!isWheelMode && (
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <label htmlFor="draft-search" className="sr-only">
+                Oyuncu veya kulüp ara
+              </label>
+              <input
+                id="draft-search"
+                type="text"
+                value={searchQ}
+                onChange={(e) => setSearchQ(e.target.value)}
+                placeholder="Oyuncu veya kulüp ara (A-Z sıralı)..."
+                className="min-w-[180px] flex-1 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-xs text-[var(--fg)] focus:border-[var(--pri-bright)] focus:outline-none"
+              />
 
-            <label htmlFor="draft-league-filter" className="sr-only">
-              Lig filtresi
-            </label>
-            <select
-              id="draft-league-filter"
-              value={leagueFilter}
-              onChange={(e) => {
-                setLeagueFilter(e.target.value);
-                setClubFilter('');
-              }}
-              className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 py-1.5 text-xs text-[var(--fg)]"
-            >
-              <option value="">Tüm Ligler</option>
-              {poolLeagues.map((lg) => (
-                <option key={lg} value={lg}>
-                  {lg}
-                </option>
-              ))}
-            </select>
-
-            <label htmlFor="draft-club-filter" className="sr-only">
-              Kulüp filtresi
-            </label>
-            <select
-              id="draft-club-filter"
-              value={clubFilter}
-              onChange={(e) => setClubFilter(e.target.value)}
-              className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 py-1.5 text-xs text-[var(--fg)]"
-            >
-              <option value="">Tüm Kulüpler</option>
-              {poolClubs.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Mevki Filtresi">
-            {(
-              [
-                ['', 'Tümü'],
-                ['GK', 'KL'],
-                ['DEF', 'DF'],
-                ['MID', 'OS'],
-                ['FWD', 'FV'],
-              ] as const
-            ).map(([val, label]) => (
-              <button
-                key={val || 'ALL'}
-                type="button"
-                aria-pressed={posFilter === val}
-                onClick={() => setPosFilter(val)}
-                className={`rounded-lg border px-2.5 py-1 text-xs font-bold transition ${
-                  posFilter === val
-                    ? 'border-[var(--pri-bright)] bg-[var(--pri)] text-white'
-                    : 'border-[var(--border)] bg-[var(--card)] text-[var(--muted)] hover:text-white'
-                }`}
+              <label htmlFor="draft-league-filter" className="sr-only">
+                Lig filtresi
+              </label>
+              <select
+                id="draft-league-filter"
+                value={leagueFilter}
+                onChange={(e) => {
+                  setLeagueFilter(e.target.value);
+                  setClubFilter('');
+                }}
+                className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 py-1.5 text-xs text-[var(--fg)]"
               >
-                {label}
-              </button>
-            ))}
-          </div>
+                <option value="">Tüm Ligler</option>
+                {poolLeagues.map((lg) => (
+                  <option key={lg} value={lg}>
+                    {lg}
+                  </option>
+                ))}
+              </select>
 
-          <div className="max-h-[520px] overflow-y-auto rounded-xl border border-[var(--border)]">
-            <table className="w-full border-collapse text-left text-xs">
-              <thead className="sticky top-0 z-10 bg-[var(--raised)] text-[11px] uppercase tracking-wider text-[var(--muted)]">
-                <tr>
-                  <th className="px-3 py-2">Oyuncu</th>
-                  <th className="px-2 py-2">Kulüp</th>
-                  <th className="px-2 py-2">Mevki</th>
-                  {draft.m.budget && <th className="px-2 py-2 text-right">Değer</th>}
-                  <th className="px-3 py-2 text-right">İşlem</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)] bg-[var(--card)]">
-                {filteredPool.slice(0, 140).map((p) => {
-                  const posAllowed =
-                    done || !activeTeam
-                      ? false
-                      : canTeamPickPos(activeTeam, p.pos, draft.pool, draft.taken, strictPos);
-                  const budgetCheck =
-                    done || !activeTeam
-                      ? { ok: false, reason: '' }
-                      : checkBudgetStatus(draft, activeTeam, p, strictPos);
-                  const canPick =
-                    !isWheelMode && isMyTurn && posAllowed && budgetCheck.ok;
+              <label htmlFor="draft-club-filter" className="sr-only">
+                Kulüp filtresi
+              </label>
+              <select
+                id="draft-club-filter"
+                value={clubFilter}
+                onChange={(e) => setClubFilter(e.target.value)}
+                className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 py-1.5 text-xs text-[var(--fg)]"
+              >
+                <option value="">Tüm Kulüpler</option>
+                {poolClubs.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                  return (
-                    <tr key={p.id} className="hover:bg-[var(--raised)]/65">
-                      <td className="px-3 py-2 font-semibold text-[var(--fg)]">{p.n}</td>
-                      <td className="px-2 py-2">
-                        <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
-                          <ClubLogo club={p.c} size={16} />
-                          <span className="max-w-[130px] truncate">{p.c}</span>
-                        </span>
-                      </td>
-                      <td className="px-2 py-2">
-                        <PosBadge pos={p.pos} />
-                      </td>
-                      {draft.m.budget && (
-                        <td className="px-2 py-2 text-right font-mono-tab text-amber-300">
-                          {cost(p)} M€
+            <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Mevki Filtresi">
+              {(
+                [
+                  ['', 'Tümü'],
+                  ['GK', 'KL'],
+                  ['DEF', 'DF'],
+                  ['MID', 'OS'],
+                  ['FWD', 'FV'],
+                ] as const
+              ).map(([val, label]) => (
+                <button
+                  key={val || 'ALL'}
+                  type="button"
+                  aria-pressed={posFilter === val}
+                  onClick={() => setPosFilter(val)}
+                  className={`rounded-lg border px-2.5 py-1 text-xs font-bold transition ${
+                    posFilter === val
+                      ? 'border-[var(--pri-bright)] bg-[var(--pri)] text-white'
+                      : 'border-[var(--border)] bg-[var(--card)] text-[var(--muted)] hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="max-h-[520px] overflow-y-auto rounded-xl border border-[var(--border)]">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead className="sticky top-0 z-10 bg-[var(--raised)] text-[11px] uppercase tracking-wider text-[var(--muted)]">
+                  <tr>
+                    <th className="px-3 py-2">Oyuncu (A-Z)</th>
+                    <th className="px-2 py-2">Kulüp</th>
+                    <th className="px-2 py-2">Mevki</th>
+                    {draft.m.budget && <th className="px-2 py-2 text-right">Değer</th>}
+                    <th className="px-3 py-2 text-right">İşlem</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)] bg-[var(--card)]">
+                  {filteredPool.map((p) => {
+                    const posAllowed =
+                      done || !activeTeam
+                        ? false
+                        : canTeamPickPos(activeTeam, p.pos, draft.pool, draft.taken, strictPos);
+                    const budgetCheck =
+                      done || !activeTeam
+                        ? { ok: false, reason: '' }
+                        : checkBudgetStatus(draft, activeTeam, p, strictPos);
+                    const canPick =
+                      !isWheelMode && isMyTurn && posAllowed && budgetCheck.ok;
+
+                    return (
+                      <tr key={p.id} className="hover:bg-[var(--raised)]/65">
+                        <td className="px-3 py-2 font-semibold text-[var(--fg)]">{p.n}</td>
+                        <td className="px-2 py-2">
+                          <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
+                            <ClubLogo club={p.c} size={16} />
+                            <span className="max-w-[130px] truncate">{p.c}</span>
+                          </span>
                         </td>
-                      )}
-                      <td className="px-3 py-2 text-right">
-                        <button
-                          type="button"
-                          disabled={!canPick}
-                          title={!posAllowed ? 'Mevki kotası dolu' : budgetCheck.reason}
-                          onClick={() => onPickPlayer(p.id)}
-                          className="rounded border border-[var(--pri-bright)] bg-[var(--pri)] px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-[#15803d] disabled:border-[var(--border)] disabled:bg-[var(--raised)] disabled:text-[var(--muted)] disabled:opacity-45"
-                        >
-                          {isWheelMode ? 'Çark' : 'Seç'}
-                        </button>
+                        <td className="px-2 py-2">
+                          <PosBadge pos={p.pos} />
+                        </td>
+                        {draft.m.budget && (
+                          <td className="px-2 py-2 text-right font-mono-tab text-amber-300">
+                            {cost(p)} M€
+                          </td>
+                        )}
+                        <td className="px-3 py-2 text-right">
+                          <button
+                            type="button"
+                            disabled={!canPick}
+                            title={!posAllowed ? 'Mevki kotası dolu' : budgetCheck.reason}
+                            onClick={() => onPickPlayer(p.id)}
+                            className="rounded border border-[var(--pri-bright)] bg-[var(--pri)] px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-[#15803d] disabled:border-[var(--border)] disabled:bg-[var(--raised)] disabled:text-[var(--muted)] disabled:opacity-45"
+                          >
+                            Seç
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredPool.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={draft.m.budget ? 5 : 4}
+                        className="px-4 py-6 text-center text-[var(--muted)]"
+                      >
+                        Arama kriterine uygun boşta oyuncu bulunamadı.
                       </td>
                     </tr>
-                  );
-                })}
-                {filteredPool.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={draft.m.budget ? 5 : 4}
-                      className="px-4 py-6 text-center text-[var(--muted)]"
-                    >
-                      Arama kriterine uygun boşta oyuncu bulunamadı.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
 
-        <aside aria-label="Takım Kadroları" className="space-y-3">
+        <aside
+          aria-label="Takım Kadroları"
+          className={
+            isWheelMode
+              ? 'grid grid-cols-1 gap-3 sm:grid-cols-2'
+              : 'space-y-3'
+          }
+        >
           {draft.teams.map((tm, idx) => (
             <div
               key={`${tm.name}_${idx}`}

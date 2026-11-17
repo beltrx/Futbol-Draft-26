@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -24,18 +24,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies and build from src
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+          mkdir -p public/bundle
+          cp dist/assets/app.js public/bundle/app.js
+          cp dist/assets/index.css public/bundle/index.css
+
+      - name: Update static bundle in branch (if changed)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/bundle/app.js public/bundle/index.css
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update compiled bundle from src [skip ci]"
+            git push || true
+          fi
+
       - name: Prepare static site directory
         run: |
           rm -rf _site
           mkdir -p _site/assets/aistudio _site/public/assets/aistudio _site/public/bundle
           touch _site/.nojekyll
-          cp public/bundle/app.js _site/assets/app.js
-          cp public/bundle/index.css _site/assets/index.css
-          cp public/bundle/app.js _site/public/bundle/app.js
-          cp public/bundle/index.css _site/public/bundle/index.css
+          cp dist/assets/app.js _site/assets/app.js
+          cp dist/assets/index.css _site/assets/index.css
+          cp dist/assets/app.js _site/public/bundle/app.js
+          cp dist/assets/index.css _site/public/bundle/index.css
           if [ -d public/assets/aistudio ]; then
-            cp -r public/assets/aistudio/*.svg _site/assets/aistudio/ 2>/dev/null || true
-            cp -r public/assets/aistudio/*.svg _site/public/assets/aistudio/ 2>/dev/null || true
+            cp -r public/assets/aistudio/* _site/assets/aistudio/ 2>/dev/null || true
+            cp -r public/assets/aistudio/* _site/public/assets/aistudio/ 2>/dev/null || true
           fi
           node -e '
             const fs = require("fs");

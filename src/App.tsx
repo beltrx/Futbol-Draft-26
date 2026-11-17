@@ -42,12 +42,12 @@ import {
 } from './utils/careerLogic';
 import {
   buildDraftState,
-  canPickPlayer,
   checkBudgetStatus,
   chooseCpuPlayer,
   cloneDraftState,
   cost,
   getWheelClubsForTurn,
+  pickRandomWheelPlayersForClub,
   siblingIds,
 } from './utils/draftLogic';
 import {
@@ -123,6 +123,7 @@ export default function App() {
     selectedClub: null,
     offeredPlayers: [],
     jokers: 3,
+    jokersByTeam: { 0: 3, 1: 3, 2: 3, 3: 3 },
   });
   const [tournament, setTournament] = useState<TournamentState | null>(null);
   const [league, setLeague] = useState<LeagueState | null>(null);
@@ -477,7 +478,14 @@ export default function App() {
     setTournament(null);
     setLeague(null);
     setMatch(null);
-    setWheel({ spinning: false, angle: 0, selectedClub: null, offeredPlayers: [], jokers: 3 });
+    setWheel({
+      spinning: false,
+      angle: 0,
+      selectedClub: null,
+      offeredPlayers: [],
+      jokers: 3,
+      jokersByTeam: { 0: 3, 1: 3, 2: 3, 3: 3 },
+    });
     setView('draft');
   }, []);
 
@@ -834,6 +842,14 @@ export default function App() {
           setDraft(res.state);
           setTournament(null);
           setLeague(null);
+          setWheel({
+            spinning: false,
+            angle: 0,
+            selectedClub: null,
+            offeredPlayers: [],
+            jokers: 3,
+            jokersByTeam: { 0: 3, 1: 3, 2: 3, 3: 3 },
+          });
           setOnlineModalOpen(false);
           setView('draft');
         }
@@ -841,13 +857,28 @@ export default function App() {
         applyPickDirectly(Number(msg.playerId), Boolean(msg.isCpu));
       } else if (msg.type === 'WHEEL_RESULT') {
         const ids = (msg.offeredIds as number[]) || [];
-        setWheel((w) => ({
-          ...w,
-          spinning: false,
-          selectedClub: (msg.club as string) || null,
-          offeredPlayers: ids.map((id) => PLAYERS_BY_ID[id]).filter(Boolean),
-          jokers: Number(msg.jokers ?? w.jokers),
-        }));
+        const ti = msg.teamIdx != null ? Number(msg.teamIdx) : undefined;
+        const incomingByTeam = msg.jokersByTeam as Record<number, number> | undefined;
+        setWheel((w) => {
+          const nextByTeam = {
+            ...(w.jokersByTeam || { 0: 3, 1: 3, 2: 3, 3: 3 }),
+            ...(incomingByTeam || {}),
+          };
+          if (ti != null && msg.jokers != null) {
+            nextByTeam[ti] = Number(msg.jokers);
+          }
+          return {
+            ...w,
+            spinning: false,
+            selectedClub: (msg.club as string) || null,
+            offeredPlayers: ids
+              .map((id) => PLAYERS_BY_ID[id])
+              .filter(Boolean)
+              .sort((a, b) => a.n.localeCompare(b.n, 'tr')),
+            jokers: Number(msg.jokers ?? w.jokers),
+            jokersByTeam: nextByTeam,
+          };
+        });
       } else if (msg.type === 'AUTO_COMPLETE_SYNC') {
         if (st.draft && Array.isArray(msg.picksByTeam)) {
           const next = cloneDraftState(st.draft);
@@ -1273,7 +1304,14 @@ export default function App() {
     const wheelClubs = getWheelClubsForTurn(draft, tm, strictPos);
     if (wheelClubs.length === 0) return;
 
-    const nextJokers = useJoker ? Math.max(0, wheel.jokers - 1) : wheel.jokers;
+    const curTeamJokers = wheel.jokersByTeam?.[ti] ?? 3;
+    if (useJoker && curTeamJokers <= 0) return;
+    const nextTeamJokers = useJoker ? Math.max(0, curTeamJokers - 1) : curTeamJokers;
+    const nextJokersByTeam = {
+      ...(wheel.jokersByTeam || { 0: 3, 1: 3, 2: 3, 3: 3 }),
+      [ti]: nextTeamJokers,
+    };
+
     const targetIdx = (Math.random() * wheelClubs.length) | 0;
     const landedClub = wheelClubs[targetIdx];
     const slice = (Math.PI * 2) / wheelClubs.length;
@@ -1292,7 +1330,8 @@ export default function App() {
       spinning: true,
       selectedClub: null,
       offeredPlayers: [],
-      jokers: nextJokers,
+      jokers: nextTeamJokers,
+      jokersByTeam: nextJokersByTeam,
     }));
 
     const frame = (now: number) => {
@@ -1304,25 +1343,31 @@ export default function App() {
         wheelRafRef.current = requestAnimationFrame(frame);
       } else {
         const curState = stateRef.current.draft || draft;
-        const offered = curState.pool
-          .filter((pl) => pl.c === landedClub && !curState.taken.has(pl.id))
-          .filter((pl) => canPickPlayer(curState, curState.teams[ti], pl, strictPos))
-          .sort((a, b) => b.r - a.r);
+        const offered = pickRandomWheelPlayersForClub(
+          curState,
+          curState.teams[ti],
+          landedClub,
+          strictPos,
+          4
+        );
 
         setWheel({
           spinning: false,
           angle: curAngle,
           selectedClub: landedClub,
           offeredPlayers: offered,
-          jokers: nextJokers,
+          jokers: nextTeamJokers,
+          jokersByTeam: nextJokersByTeam,
         });
 
         if (net.connected) {
           onlineNet.send({
             type: 'WHEEL_RESULT',
             club: landedClub,
+            teamIdx: ti,
             offeredIds: offered.map((pl) => pl.id),
-            jokers: nextJokers,
+            jokers: nextTeamJokers,
+            jokersByTeam: nextJokersByTeam,
           });
         }
       }
