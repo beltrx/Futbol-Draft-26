@@ -31,7 +31,7 @@ jobs:
 
       - name: Install dependencies and build from src
         run: |
-          npm install --no-audit --no-fund
+          npm install --legacy-peer-deps --no-audit --no-fund
           npm run build
           mkdir -p public/bundle
           cp dist/assets/app.js public/bundle/app.js
