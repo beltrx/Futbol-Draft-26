@@ -33,12 +33,14 @@ import type {
   TournamentState,
   WheelState,
 } from './types/game';
+import { UCL_BRAND_LOGOS } from './data/logos';
 import {
   ensureTeamCareerState,
   finalizeCareerWeekAfterUserMatch,
   initCareerLeague,
   resolveTeamCareerEventChoice,
   simulateRestOfLeagueSeason,
+  simulateSingleCareerWeek,
 } from './utils/careerLogic';
 import {
   buildDraftState,
@@ -85,7 +87,13 @@ function cloneLeague(lg: LeagueState): LeagueState {
   }
   return {
     ...lg,
-    schedule: lg.schedule.map((w) => w.map((f) => ({ ...f, redCards: f.redCards ? [...f.redCards] : undefined }))),
+    schedule: lg.schedule.map((w) =>
+      w.map((f) => ({
+        ...f,
+        redCards: f.redCards ? [...f.redCards] : undefined,
+        pen: f.pen ? ([...f.pen] as [number, number]) : undefined,
+      }))
+    ),
     standings: lg.standings.map((r) => ({ ...r })),
     playerStats: { ...lg.playerStats },
     injuries: { ...lg.injuries },
@@ -95,6 +103,7 @@ function cloneLeague(lg: LeagueState): LeagueState {
     eventHistory: [...lg.eventHistory],
     newsFeed: [...lg.newsFeed],
     teamCareer: clonedTeamCareer,
+    uclPots: lg.uclPots ? lg.uclPots.map((p) => ({ ...p })) : undefined,
   };
 }
 
@@ -300,11 +309,12 @@ export default function App() {
       const { draft: curDraft, league: curLeague, net: curNet } = stateRef.current;
       if (!curDraft) return;
       const isCareer = !!curDraft.m.career;
+      const allowExtraTime = !isCareer || Boolean(curLeague?.isUcl && curLeague.week > 8);
       const cloned = cloneDraftState(curDraft);
       cloned.teams.forEach((tm) => ensureTeamLineup(tm, curLeague, isCareer));
       const sA = side(cloned.teams[a], curLeague, isCareer);
       const sB = side(cloned.teams[b], curLeague, isCareer);
-      const plan = generateMatchPlan(cloned.teams[a], cloned.teams[b], sA, sB, !isCareer);
+      const plan = generateMatchPlan(cloned.teams[a], cloned.teams[b], sA, sB, allowExtraTime);
       const mState = createInitialMatchState(
         a,
         b,
@@ -391,7 +401,8 @@ export default function App() {
           mNext.sc[1],
           mNext.goalsList[0],
           mNext.goalsList[1],
-          mNext.playerStats
+          mNext.playerStats,
+          mNext.penSc
         );
         setLeague(lgClone);
         if (curNet.connected && curNet.role === 'host') {
@@ -558,13 +569,33 @@ export default function App() {
   }, []);
 
   const executePlayCareerMatch = useCallback(() => {
-    const { draft: curDraft, league: curLeague } = stateRef.current;
+    const { draft: curDraft, league: curLeague, net: curNet } = stateRef.current;
     if (!curDraft || !curLeague || curLeague.week > curLeague.maxWeeks) return;
     const roundMatches = curLeague.schedule[curLeague.week - 1] || [];
     const userMatch = roundMatches.find(
       (m) => !m.done && (curDraft.teams[m.a]?.isHuman || curDraft.teams[m.b]?.isHuman)
     );
-    if (!userMatch) return;
+    if (!userMatch) {
+      if (!curNet.connected || curNet.role === 'host') {
+        const lgClone = cloneLeague(curLeague);
+        const draftClone = cloneDraftState(curDraft);
+        simulateSingleCareerWeek(lgClone, draftClone.teams);
+        setDraft(draftClone);
+        setLeague(lgClone);
+        if (curNet.connected && curNet.role === 'host') {
+          onlineNet.send({
+            type: 'CAREER_SYNC',
+            teams: draftClone.teams,
+            league: {
+              ...lgClone,
+              usedEventIds: [...lgClone.usedEventIds],
+              usedNewsIds: [...lgClone.usedNewsIds],
+            },
+          });
+        }
+      }
+      return;
+    }
     setupMatch(userMatch.a, userMatch.b, null);
   }, [setupMatch]);
 
@@ -1037,13 +1068,16 @@ export default function App() {
         autostart === '1' ||
         autostart === 'career' ||
         autostart === 'bundesliga' ||
-        autostart === 'seriea'
+        autostart === 'seriea' ||
+        autostart === 'ucl'
       ) {
         const startLeague =
           autostart === 'bundesliga'
             ? 'Bundesliga'
             : autostart === 'seriea'
             ? 'Serie A'
+            : autostart === 'ucl'
+            ? 'Şampiyonlar Ligi'
             : 'Premier Lig';
         const res = buildDraftState({
           mode: 'career',
@@ -1175,7 +1209,8 @@ export default function App() {
               mNext.sc[1],
               mNext.goalsList[0],
               mNext.goalsList[1],
-              mNext.playerStats
+              mNext.playerStats,
+              mNext.penSc
             );
             setLeague(lgClone);
             if (curNet.connected && curNet.role === 'host') {
@@ -1573,8 +1608,44 @@ export default function App() {
     }
   };
 
+  const isUclThemeActive = Boolean(
+    (mode === 'career' && careerLeague === 'Şampiyonlar Ligi' && (!draft || draft.m.career)) ||
+      (draft?.m.career && (league?.isUcl || careerLeague === 'Şampiyonlar Ligi'))
+  );
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('theme-ucl', isUclThemeActive);
+    document.body.classList.toggle('theme-ucl', isUclThemeActive);
+    return () => {
+      document.documentElement.classList.remove('theme-ucl');
+      document.body.classList.remove('theme-ucl');
+    };
+  }, [isUclThemeActive]);
+
   return (
-    <div className="mx-auto max-w-[1260px] px-3 pb-14 pt-4 sm:px-4">
+    <div
+      className={`relative mx-auto max-w-[1260px] px-3 pb-14 pt-4 sm:px-4 ${
+        isUclThemeActive ? 'theme-ucl' : ''
+      }`}
+    >
+      {isUclThemeActive && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+        >
+          <img
+            src={UCL_BRAND_LOGOS.starballWhite}
+            alt=""
+            className="absolute -right-24 -top-24 h-[520px] w-[520px] select-none object-contain opacity-[0.045]"
+          />
+          <img
+            src={UCL_BRAND_LOGOS.starballWhite}
+            alt=""
+            className="absolute -bottom-28 -left-24 h-[440px] w-[440px] select-none object-contain opacity-[0.035]"
+          />
+        </div>
+      )}
+      <div className="relative z-10">
       <HeaderBar
         view={view}
         draft={draft}
@@ -1881,6 +1952,7 @@ export default function App() {
           />
         )}
       </main>
+      </div>
     </div>
   );
 }

@@ -177,6 +177,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
                 onChange={(e) => onChangeCareerLeague(e.target.value)}
                 className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--fg)] disabled:opacity-60"
               >
+                <option value="Şampiyonlar Ligi">UEFA Şampiyonlar Ligi (36 Takım · 4 Torba · 8 Maç + Eleme)</option>
                 <option value="Premier Lig">Premier Lig (20 Takım · 38 Hafta)</option>
                 <option value="Bundesliga">Bundesliga (18 Takım · 34 Hafta)</option>
                 <option value="Serie A">Serie A (20 Takım · 38 Hafta)</option>

@@ -1,0 +1,213 @@
+1. Slovan Bratislava
+
+Dominik Takac 70
+Svetozar Markovic 69
+Kenan Bajric 67
+Kevin Wimmer 73
+Sandro Cruz 71
+César Blackman 70
+Peter Pokorný 72
+Rahim Ibrahim 68
+Daiki Matsuoka 68
+Nino Marcelli 75
+Alasana Yirajang 68
+Suleiman Camara 71
+Tigran Barseghyan 71
+Andraz Sporar 77
+
+2. Real Betis
+
+Álvaro Valles 77
+Natan 82
+Valentín Gómez 79
+Diego Llorente 73
+Fran García 76
+Junior Firpo 74
+Ángel Ortiz 76
+Héctor Bellerín 72
+Facundo Bernal 78
+Marc Roca 72
+Nelson Deossa 74
+Pablo Fornals 76
+Dani Ceballos 75
+Álvaro Fidalgo 80
+Giovani Lo Celso 81
+Isco 82
+Abde Ezzalzouli 84
+Rodrigo Riquelme 75
+Antony 84
+Troy Parrott 83
+
+3. LASK
+
+Lukas Jungwirth 77
+Xavier Mbuyamba 75
+João Tornich 76
+Andrés Andrade 78
+Miguel Freckleton 73
+George Bello 73
+Yvan Dibango 75
+Kasper Jørgensen 78
+Melayro Bogarde 77
+Robert Ljubicic 76
+Sascha Horvath 79
+Alessandro Schöpf 75
+Florian Flecker 74
+Krystof Danek 80
+Moses Usor 80
+Samuel Adeniran 78
+Sasa Kalajdzic 82
+Christoph Lang 79
+Ramiz Harakaté 75
+
+4. Shakhtar Donetsk
+
+Dmytro Riznyk 74
+Mykola Matvienko 79
+Valeriy Bondar 78
+Alan Matturro 81
+Marlon 76
+Pedro Henrique 75
+Vinícius Tobias 77
+Oleksandr Karavaev 71
+Marlon Gomes 73
+Dmytro Kryskiv 69
+Isaque 68
+Oleg Ocheretko 67
+Newerton 77
+Eguinaldo 75
+Alisson Santana 79
+Gabriel Carvalho 71
+Pedrinho 77
+Lucas Ferreira 73
+Kauã Elias 78
+Luca Meirelles 76
+Lassina Traoré 80
+
+5. Viking FK
+
+Lubomir Belko 75
+Henrik Falchener 83
+Gianni Stensness 78
+Jesper Daland 77
+Vetle Auklend 75
+Kristoffer Haugen 74
+Henrik Heggheim 80
+Herman Haugen 79
+Sondre Bjørshol 78
+Joe Bell 78
+Tobias Moi 76
+Kristoffer Askildsen 80
+Simen Kvia-Egeskog 79
+Henrik Bjørdal 79
+Zlatko Tripic 83
+Niklas Fuglestad 75
+Peter Christiansen 77
+Erik Botheim 77
+Nick D'Agostino 72
+Veton Berisha 69
+
+6. AEK Atina
+
+Thomas Strakosha 75
+Harold Moukoudi 74
+Filipe Relvas 73
+Domagoj Vida 75
+Stavro Pilo 72
+Charalampos Lykogiannis 77
+Lazaros Rota 76
+Kervin Arriaga 76
+Kaan Kairinen 78
+Răzvan Marin 78
+Milán Vitális 75
+Lovro Majer 79
+Mijat Gacinovic 75
+João Mário 80
+Aboubakary Koita 71
+Oleksandr Zubkov 73
+Luka Jović  81
+Barnabás Varga 78
+
+7. Sabah FK
+
+Stas Pokatilov 66
+Steve Solvet 67
+Aden McCarthy 65
+Tymoteusz Puchacz 74
+Akim Zedadka 70
+Ivan Lepinjica 70
+Umarali Rakhmonaliev 65
+Du Queiroz 69
+Aleksey Isayev 64
+Khayal Aliyev 65
+Joy-Lance Mickels 67
+Veljko Simic 73
+Christian Nwachukwu 72
+Kaheem Parris 70
+
+8. RC Lens
+
+Robin Risser 84
+Ismaëlo Ganiou 79
+Samson Baidoo 82
+Jean-Clair Todibo 80
+Kyllian Antonio 78
+Nidal Celik 79
+Matthieu Udol 77
+Saud Abdulhamid 81
+Yacine Titraoui 75
+Andrija Bulatovic 75
+Michaël Cuisance 76
+Amadou Haidara 77
+Thorgan Hazard 72
+Abdallah Sima 78
+Michał Skóraś 80
+Junior Kadile 80
+Florian Thauvin 81
+Franjo Ivanović 81
+Odsonne Édouard 81
+Florian Sotoca 80
+
+9. SK Slavia Prag
+
+Nazar Domchak 75
+Stepan Chaloupek 74
+David Zima 77
+Igoh Ogbu 78
+Ange N'Guessan 79
+Tomas Holes 79
+David Jurásek 77
+Samuel Isife 74
+David Moses 74
+Michal Sadílek 76
+Wiktor Nowak 73
+Lukas Provod 75
+Danijel Sturm 78
+Emmanuel Ayaosi 74
+Ivan Schranz 82
+Mojmír Chytil 80
+Tomas Chory 80
+
+10. LOSC Lille
+
+Berke Özer 80
+Orlando Gill 78
+Nathan Ngoy 83
+Alexsandro 80
+Tanguy Nianzou 81
+Romain Perraud 80
+Tiago Santos 82
+Loun Srdanovic 76
+Ngal'ayel Mukau 76
+Nabil Bentaleb 77
+Benjamin André 78
+Maurits Kjærgaard 81
+Hákon Arnar Haraldsson 80
+Başar Önal 75
+Osame Sahraoui 76
+Soriba Diaoune 77
+Dilane Bakwa 78
+Ethan Mbappé 73
+Ayase Ueda 80
+Hamza Igamane 79
+Olivier Giroud 81

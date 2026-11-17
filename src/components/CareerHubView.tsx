@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { CLUB_STADIUMS } from '../data/database';
+import { UCL_BRAND_LOGOS } from '../data/logos';
 import { isPeerReadyForPhase } from '../services/onlineNet';
 import type {
   CareerEventChoice,
@@ -7,7 +9,11 @@ import type {
   NetStateSnapshot,
   Team,
 } from '../types/game';
-import { getSortedStandings, getSuspendedPlayersForTeam } from '../utils/careerLogic';
+import {
+  getSortedStandings,
+  getSuspendedPlayersForTeam,
+  getUclWeekTitle,
+} from '../utils/careerLogic';
 import {
   ClubLogo,
   LeagueLogo,
@@ -122,13 +128,76 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
     [league.playerStats]
   );
 
+  const isUcl = !!league.isUcl || league.leagueName === 'Şampiyonlar Ligi';
   const championRow = standings[0];
-  const championTeam = championRow ? teams[championRow.teamIdx] : undefined;
+  const championTeam =
+    isUcl && league.uclChampionTeamIdx != null
+      ? teams[league.uclChampionTeamIdx]
+      : championRow
+      ? teams[championRow.teamIdx]
+      : undefined;
+
+  const potByTeamIdx = useMemo(() => {
+    const map: Record<number, number> = {};
+    (league.uclPots || []).forEach((p) => {
+      map[p.teamIdx] = p.pot;
+    });
+    return map;
+  }, [league.uclPots]);
+
+  const getTeamStadium = (tm: Team | undefined): string | null => {
+    if (!tm) return null;
+    return (
+      CLUB_STADIUMS[tm.name] ||
+      (tm.customIdentity?.club ? CLUB_STADIUMS[tm.customIdentity.club] : null) ||
+      null
+    );
+  };
+
+  const tabItems: [LeagueTab, string][] = isUcl
+    ? [
+        ['standings', `Lig Aşaması Puan Durumu (${teams.length} Takım)`],
+        ['pots', 'Torbalar & Katsayılar (1-4)'],
+        ['bracket', 'Play-Off & Eleme Ağacı'],
+        ['fixtures', 'Fikstür & Sonuçlar'],
+        ['leaders', 'Gol & Asist Krallığı'],
+        ['news', `Turnuva Haberleri (${league.newsFeed.length})`],
+      ]
+    : [
+        ['standings', `Puan Durumu (${teams.length} Takım)`],
+        ['fixtures', 'Haftalık Fikstür & Sonuçlar'],
+        ['leaders', 'Gol & Asist Krallığı'],
+        ['news', `Lig Haberleri (${league.newsFeed.length})`],
+      ];
 
   return (
-    <section aria-label={`${league.leagueName} Kariyer Merkezi`} className="space-y-4">
-      <div className="rounded-2xl border border-[var(--border)] bg-gradient-to-br from-[#0f151c] to-[#090c10] p-5 shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+    <section aria-label={`${league.leagueName} Kariyer Merkezi`} className="relative space-y-4">
+      {isUcl && (
+        <img
+          src={UCL_BRAND_LOGOS.starballWhite}
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none fixed right-[-80px] top-[90px] z-0 h-[460px] w-[460px] select-none object-contain opacity-[0.055]"
+        />
+      )}
+
+      <div
+        className={`relative overflow-hidden rounded-2xl border border-[var(--border)] p-5 shadow-xl ${
+          isUcl
+            ? 'bg-gradient-to-br from-[#061338] via-[#0a1d56] to-[#03091c]'
+            : 'bg-gradient-to-br from-[#0f151c] to-[#090c10]'
+        }`}
+      >
+        {isUcl && (
+          <img
+            src={UCL_BRAND_LOGOS.starballWhite}
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-10 -top-10 h-56 w-56 select-none object-contain opacity-10"
+          />
+        )}
+
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <TeamIdentityBadge team={userTeam} size={50} />
             <div>
@@ -136,12 +205,16 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
                 <span className="inline-flex items-center gap-1.5 rounded bg-[var(--pri)]/40 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[var(--pri-bright)]">
                   <LeagueLogo league={league.leagueName} size={16} />
                   <span>
-                    {league.leagueName} · {league.maxWeeks} Haftalık Tam Sezon
+                    {isUcl
+                      ? 'UEFA Şampiyonlar Ligi · 36 Takım Yeni Format'
+                      : `${league.leagueName} · ${league.maxWeeks} Haftalık Tam Sezon`}
                   </span>
                 </span>
                 <span className="font-mono-tab text-xs font-bold text-amber-300">
                   {seasonOver
-                    ? 'Sezon Tamamlandı'
+                    ? 'Turnuva Tamamlandı'
+                    : isUcl
+                    ? getUclWeekTitle(league.week)
                     : `Hafta ${league.week} / ${league.maxWeeks}`}
                 </span>
               </div>
@@ -150,8 +223,14 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
               </h1>
               <div className="mt-1 flex flex-wrap gap-3 text-xs text-[var(--muted)]">
                 <span>
-                  Sıralama: <strong className="text-white">{userRank}.</strong>
+                  Lig Aşaması Sırası: <strong className="text-white">{userRank}.</strong>
                 </span>
+                {isUcl && potByTeamIdx[activeUserIdx] && (
+                  <span>
+                    Torba:{' '}
+                    <strong className="text-sky-300">{potByTeamIdx[activeUserIdx]}. Torba</strong>
+                  </span>
+                )}
                 <span>
                   Kulüp Kasası:{' '}
                   <strong className="font-mono-tab text-emerald-300">{myFunds} M€</strong>
@@ -161,11 +240,7 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
                 </span>
                 <span>
                   Moral:{' '}
-                  <strong
-                    className={
-                      myMorale >= 0 ? 'text-emerald-300' : 'text-red-300'
-                    }
-                  >
+                  <strong className={myMorale >= 0 ? 'text-emerald-300' : 'text-red-300'}>
                     {myMorale >= 0 ? `+${myMorale}%` : `${myMorale}%`}
                   </strong>
                 </span>
@@ -187,25 +262,59 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
                 onClick={onSimulateSeason}
                 className="rounded-lg border border-amber-400/50 bg-amber-900/45 px-3.5 py-2 text-xs font-bold text-amber-100 hover:bg-amber-800/65"
               >
-                Sezonu Tamamla (Hızlı Simülasyon)
+                {isUcl ? 'Turnuvayı Tamamla (Hızlı Simülasyon)' : 'Sezonu Tamamla (Hızlı Simülasyon)'}
               </button>
             )}
           </div>
         </div>
 
+        {isUcl && (
+          <div className="relative z-10 mt-3.5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-400/25 bg-[#040a21]/80 px-3.5 py-2">
+            <div className="flex items-center gap-2">
+              <img
+                src={UCL_BRAND_LOGOS.starballWhite}
+                alt="UCL"
+                className="h-5 w-5 object-contain"
+              />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-sky-200/90">
+                UEFA Champions League · Resmi Sponsorlar
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              {UCL_BRAND_LOGOS.sponsors.map((sp) => (
+                <div
+                  key={sp.name}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1"
+                  title={sp.name}
+                >
+                  <img
+                    src={sp.logo}
+                    alt={sp.name}
+                    className="h-4 w-auto max-w-[68px] object-contain"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {seasonOver && championTeam ? (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/50 bg-amber-950/35 p-4">
+          <div className="relative z-10 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/50 bg-amber-950/35 p-4">
             <div className="flex items-center gap-3">
               <TeamIdentityBadge team={championTeam} size={40} />
               <div>
                 <div className="text-xs font-bold uppercase tracking-wider text-amber-300">
-                  {league.maxWeeks} HAFTALIK {league.leagueName.toUpperCase()} ŞAMPİYONU
+                  {isUcl
+                    ? 'UEFA ŞAMPİYONLAR LİGİ ŞAMPİYONU'
+                    : `${league.maxWeeks} HAFTALIK ${league.leagueName.toUpperCase()} ŞAMPİYONU`}
                 </div>
                 <div className="text-lg font-extrabold text-white">
-                  {championTeam.name} ({championRow.pts} Puan)
+                  {championTeam.name}{' '}
+                  {!isUcl && championRow ? `(${championRow.pts} Puan)` : '· Avrupa Şampiyonu 🏆'}
                 </div>
                 <div className="text-xs text-amber-100/80">
-                  Senin sıralaman: {userRank}. sıra ({standings.find((r) => r.teamIdx === activeUserIdx)?.pts ?? 0} puan)
+                  Lig aşaması sıralaman: {userRank}. sıra (
+                  {standings.find((r) => r.teamIdx === activeUserIdx)?.pts ?? 0} puan)
                 </div>
               </div>
             </div>
@@ -218,12 +327,25 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
             </button>
           </div>
         ) : nextUserMatch && nextOppTeam ? (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[var(--border)] bg-[#0b1016]/90 p-3.5">
+          <div className="relative z-10 mt-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[var(--border)] bg-[#0b1016]/90 p-3.5">
             <div className="space-y-1.5">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]">
-                {humanRoundMatches.length > 1
-                  ? `Sıradaki Hafta Maçları · ${league.week}. Hafta`
-                  : `Sıradaki Maç · ${league.week}. Hafta (${(myMatchForBans || nextUserMatch).a === activeUserIdx ? 'İç Saha' : 'Deplasman'})`}
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]">
+                <span>
+                  {isUcl
+                    ? `Sıradaki Maç · ${getUclWeekTitle(league.week)}`
+                    : humanRoundMatches.length > 1
+                    ? `Sıradaki Hafta Maçları · ${league.week}. Hafta`
+                    : `Sıradaki Maç · ${league.week}. Hafta (${
+                        (myMatchForBans || nextUserMatch).a === activeUserIdx
+                          ? 'İç Saha'
+                          : 'Deplasman'
+                      })`}
+                </span>
+                {getTeamStadium(teams[(myMatchForBans || nextUserMatch).a]) && (
+                  <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-sky-200">
+                    🏟 {getTeamStadium(teams[(myMatchForBans || nextUserMatch).a])}
+                  </span>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -272,15 +394,35 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
               <button
                 type="button"
                 onClick={onPlayNextMatch}
-                className="rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-5 py-2.5 text-xs font-bold text-white shadow-[0_8px_22px_-6px_rgba(34,197,94,0.65)] transition hover:bg-[#15803d]"
+                className="rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-5 py-2.5 text-xs font-bold text-white shadow-[0_8px_22px_-6px_rgba(34,197,94,0.65)] transition hover:opacity-95"
               >
                 {net.connected
                   ? myReady
                     ? 'Hazır ✓ (Diğer Oyuncu Bekleniyor...)'
-                    : `${league.week}. Hafta İçin Hazır Ol →`
-                  : `${league.week}. Hafta Maçına Çık →`}
+                    : `${isUcl ? getUclWeekTitle(league.week) : `${league.week}. Hafta`} İçin Hazır Ol →`
+                  : `${isUcl ? getUclWeekTitle(league.week) : `${league.week}. Hafta`} Maçına Çık →`}
               </button>
             </div>
+          </div>
+        ) : !seasonOver ? (
+          <div className="relative z-10 mt-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[var(--border)] bg-[#0b1016]/90 p-3.5">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-sky-300">
+                {getUclWeekTitle(league.week)}
+              </div>
+              <p className="mt-0.5 text-xs text-[var(--muted)]">
+                {league.week === 9 && userRank <= 8
+                  ? 'Takımın Lig Aşamasını ilk 8 sırada tamamladığı için doğrudan Son 16 turuna yükseldi! Play-Off turunu simüle ederek rakibini bekleyebilirsin.'
+                  : 'Bu turda takımının maçı bulunmuyor. Turnuvanın sıradaki eleme turunu simüle edebilirsin.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onPlayNextMatch}
+              className="rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] px-5 py-2.5 text-xs font-bold text-white"
+            >
+              {getUclWeekTitle(league.week)} Maçlarını Simüle Et →
+            </button>
           </div>
         ) : null}
       </div>
@@ -288,16 +430,9 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
       <div
         role="tablist"
         aria-label="Kariyer Sekmeleri"
-        className="flex flex-wrap gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2"
+        className="relative z-10 flex flex-wrap gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2"
       >
-        {(
-          [
-            ['standings', `Puan Durumu (${teams.length} Takım)`],
-            ['fixtures', 'Haftalık Fikstür & Sonuçlar'],
-            ['leaders', 'Gol & Asist Krallığı'],
-            ['news', `Lig Haberleri (${league.newsFeed.length})`],
-          ] as [LeagueTab, string][]
-        ).map(([tabId, label]) => (
+        {tabItems.map(([tabId, label]) => (
           <button
             key={tabId}
             type="button"
@@ -316,7 +451,24 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
       </div>
 
       {league.tab === 'standings' && (
-        <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg">
+        <div className="relative z-10 overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg">
+          {isUcl && (
+            <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3.5 py-2 text-[11px]">
+              <span className="inline-flex items-center gap-1.5 font-bold text-emerald-300">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                1–8. Sıra: Doğrudan Son 16 Turu
+              </span>
+              <span className="inline-flex items-center gap-1.5 font-bold text-sky-300">
+                <span className="h-2.5 w-2.5 rounded-full bg-sky-400" />
+                9–24. Sıra: Play-Off Eleme Turu (9v23, 10v24, 11v21, 12v22...)
+              </span>
+              <span className="inline-flex items-center gap-1.5 font-bold text-rose-300">
+                <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
+                25–36. Sıra: Turnuvadan Elendi
+              </span>
+            </div>
+          )}
+
           <table className="w-full min-w-[600px] border-collapse text-left text-xs">
             <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wider text-[var(--muted)]">
               <tr>
@@ -339,14 +491,19 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
                 const gd = row.gf - row.ga;
                 const isUser = !!tm?.isHuman;
                 const relegationStart = Math.max(15, standings.length - 2);
-                const zoneClass =
-                  rank <= 4
-                    ? 'border-l-4 border-l-emerald-500'
-                    : rank <= 6
-                    ? 'border-l-4 border-l-sky-500'
-                    : rank >= relegationStart
-                    ? 'border-l-4 border-l-red-500'
-                    : 'border-l-4 border-l-transparent';
+                const zoneClass = isUcl
+                  ? rank <= 8
+                    ? 'border-l-4 border-l-emerald-400'
+                    : rank <= 24
+                    ? 'border-l-4 border-l-sky-400'
+                    : 'border-l-4 border-l-rose-500/80'
+                  : rank <= 4
+                  ? 'border-l-4 border-l-emerald-500'
+                  : rank <= 6
+                  ? 'border-l-4 border-l-sky-500'
+                  : rank >= relegationStart
+                  ? 'border-l-4 border-l-red-500'
+                  : 'border-l-4 border-l-transparent';
 
                 return (
                   <tr
@@ -360,6 +517,11 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
                       <div className="flex items-center gap-2">
                         <TeamIdentityBadge team={tm} size={20} />
                         <span className="truncate text-[var(--fg)]">{tm?.name}</span>
+                        {isUcl && potByTeamIdx[row.teamIdx] && (
+                          <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono-tab text-[9px] font-semibold text-sky-200">
+                            T{potByTeamIdx[row.teamIdx]}
+                          </span>
+                        )}
                         {isUser && (
                           <span className="rounded bg-[var(--pri)] px-1.5 py-0.5 text-[10px] text-white">
                             {row.teamIdx === activeUserIdx ? 'SEN' : 'OYUNCU'}
@@ -387,11 +549,164 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
         </div>
       )}
 
+      {isUcl && league.tab === 'pots' && (
+        <div className="relative z-10 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {([1, 2, 3, 4] as const).map((potNum) => {
+            const potTeams = (league.uclPots || []).filter((p) => p.pot === potNum);
+            return (
+              <div
+                key={potNum}
+                className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg"
+              >
+                <div className="mb-3 flex items-center justify-between border-b border-[var(--border)] pb-2">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src={UCL_BRAND_LOGOS.starballWhite}
+                      alt=""
+                      className="h-4 w-4 object-contain"
+                    />
+                    <h2 className="text-sm font-extrabold text-sky-300">{potNum}. Torba</h2>
+                  </div>
+                  <span className="font-mono-tab text-[11px] font-semibold text-[var(--muted)]">
+                    Katsayı
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {potTeams.map((pt) => {
+                    const tm = teams[pt.teamIdx];
+                    const isUser = !!tm?.isHuman;
+                    return (
+                      <div
+                        key={pt.teamIdx}
+                        className={`flex items-center justify-between gap-2 rounded-xl border px-2.5 py-2 text-xs ${
+                          isUser
+                            ? 'border-sky-400 bg-blue-950/60 font-bold text-white'
+                            : 'border-[var(--border)] bg-[var(--card)] text-[var(--fg)]'
+                        }`}
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <TeamIdentityBadge team={tm} size={20} className="shrink-0" />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="truncate font-semibold">{tm?.name || pt.club}</span>
+                              {pt.note && (
+                                <span className="rounded bg-sky-500/20 px-1 py-0.2 text-[9px] font-bold text-sky-300">
+                                  {pt.note}
+                                </span>
+                              )}
+                            </div>
+                            <div className="truncate text-[10px] text-[var(--muted)]">
+                              {pt.country}
+                              {getTeamStadium(tm) ? ` · ${getTeamStadium(tm)}` : ''}
+                            </div>
+                          </div>
+                        </div>
+                        <span className="shrink-0 font-mono-tab text-xs font-bold text-amber-300">
+                          {pt.coeff}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {isUcl && league.tab === 'bracket' && (
+        <div className="relative z-10 space-y-4">
+          {(
+            [
+              { weekIdx: 8, title: 'Play-Off Eleme Turu (9-24. Sıralar)', desc: '9 vs 23 · 10 vs 24 · 11 vs 21 · 12 vs 22 · 13 vs 19 · 14 vs 20 · 15 vs 17 · 16 vs 18' },
+              { weekIdx: 9, title: 'Son 16 Turu', desc: 'İlk 8 Sıradaki Takımlar vs Play-Off Galipleri' },
+              { weekIdx: 10, title: 'Çeyrek Final', desc: 'Son 8 Takım' },
+              { weekIdx: 11, title: 'Yarı Final', desc: 'Son 4 Takım' },
+              { weekIdx: 12, title: 'UEFA Şampiyonlar Ligi Finali', desc: 'Büyük Final' },
+            ] as const
+          ).map((stage) => {
+            const matches = league.schedule[stage.weekIdx] || [];
+            return (
+              <div
+                key={stage.weekIdx}
+                className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg"
+              >
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-2">
+                  <div>
+                    <h2 className="text-sm font-extrabold text-sky-300">{stage.title}</h2>
+                    <p className="text-[11px] text-[var(--muted)]">{stage.desc}</p>
+                  </div>
+                  <span className="rounded-full bg-[var(--raised)] px-2.5 py-0.5 text-[10px] font-bold text-[var(--muted)]">
+                    {matches.length > 0 ? `${matches.length} Eşleşme` : 'Lig Aşaması Sonrası Belli Olacak'}
+                  </span>
+                </div>
+
+                {matches.length === 0 ? (
+                  <p className="py-3 text-center text-xs text-[var(--muted)]">
+                    Önceki aşama tamamlandığında eşleşmeler otomatik olarak burada yer alacak.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+                    {matches.map((m, mIdx) => {
+                      const tA = teams[m.a];
+                      const tB = teams[m.b];
+                      const stadium = getTeamStadium(tA);
+                      return (
+                        <div
+                          key={`${stage.weekIdx}_${mIdx}`}
+                          className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3"
+                        >
+                          <div className="mb-1.5 flex items-center justify-between text-[10px] font-bold text-sky-300/90">
+                            <span>{m.stageLabel || stage.title}</span>
+                            {stadium && <span className="text-[var(--muted)]">🏟 {stadium}</span>}
+                          </div>
+                          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-xs">
+                            <div className="flex min-w-0 items-center justify-end gap-1.5 text-right">
+                              <span
+                                className={`truncate font-bold ${
+                                  m.winner === m.a ? 'text-emerald-300' : 'text-white'
+                                }`}
+                              >
+                                {tA?.name}
+                              </span>
+                              <TeamIdentityBadge team={tA} size={20} className="shrink-0" />
+                            </div>
+                            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-center font-mono-tab font-extrabold text-white">
+                              {m.done && m.sc
+                                ? `${m.sc[0]} - ${m.sc[1]}${
+                                    m.pen ? ` (P ${m.pen[0]}-${m.pen[1]})` : ''
+                                  }`
+                                : 'vs'}
+                            </div>
+                            <div className="flex min-w-0 items-center justify-start gap-1.5 text-left">
+                              <TeamIdentityBadge team={tB} size={20} className="shrink-0" />
+                              <span
+                                className={`truncate font-bold ${
+                                  m.winner === m.b ? 'text-emerald-300' : 'text-white'
+                                }`}
+                              >
+                                {tB?.name}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {league.tab === 'fixtures' && (
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg">
+        <div className="relative z-10 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-3">
             <h2 className="text-sm font-bold text-[var(--fg)]">
-              {league.viewWeek}. Hafta Maçları ({league.maxWeeks} Haftalık Fikstür)
+              {isUcl
+                ? getUclWeekTitle(league.viewWeek)
+                : `${league.viewWeek}. Hafta Maçları (${league.maxWeeks} Haftalık Fikstür)`}
             </h2>
 
             <div className="flex items-center gap-2">
@@ -414,7 +729,7 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
               >
                 {Array.from({ length: league.maxWeeks }, (_, idx) => idx + 1).map((w) => (
                   <option key={w} value={w}>
-                    {w}. Hafta {w === league.week ? '(Aktif)' : ''}
+                    {isUcl ? getUclWeekTitle(w) : `${w}. Hafta`} {w === league.week ? '(Aktif)' : ''}
                   </option>
                 ))}
               </select>
@@ -434,6 +749,7 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
               const tA = teams[m.a];
               const tB = teams[m.b];
               const isUserMatch = !!tA?.isHuman || !!tB?.isHuman;
+              const stadium = getTeamStadium(tA);
               return (
                 <div
                   key={`${league.viewWeek}_${idx}`}
@@ -444,6 +760,12 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
                       : 'border-[var(--border)] bg-[var(--card)]'
                   }`}
                 >
+                  {(stadium || m.stageLabel) && (
+                    <div className="mb-1 flex items-center justify-between text-[10px] text-[var(--muted)]">
+                      <span>{m.stageLabel || `${league.viewWeek}. Hafta`}</span>
+                      {stadium && <span>🏟 {stadium}</span>}
+                    </div>
+                  )}
                   <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 sm:gap-2.5">
                     <div className="flex min-w-0 items-center justify-end gap-1.5 text-right">
                       <span
@@ -465,7 +787,9 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
                           : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)]'
                       }`}
                     >
-                      {m.done && m.sc ? `${m.sc[0]} - ${m.sc[1]}` : 'vs'}
+                      {m.done && m.sc
+                        ? `${m.sc[0]} - ${m.sc[1]}${m.pen ? ` (${m.pen[0]}-${m.pen[1]})` : ''}`
+                        : 'vs'}
                     </div>
 
                     <div className="flex min-w-0 items-center justify-start gap-1.5 text-left">

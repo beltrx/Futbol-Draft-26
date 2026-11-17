@@ -104,8 +104,8 @@ export const LineupView: React.FC<LineupViewProps> = ({
 
         <div className="flex flex-wrap items-center gap-2">
           {isCareer && !league && onChangeCareerLeague && (
-            <div className="inline-flex items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card)] p-1">
-              {(['Premier Lig', 'Bundesliga', 'Serie A'] as const).map((lgName) => {
+            <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card)] p-1">
+              {(['Şampiyonlar Ligi', 'Premier Lig', 'Bundesliga', 'Serie A'] as const).map((lgName) => {
                 const selected = activeLeagueName === lgName;
                 return (
                   <button

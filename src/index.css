@@ -25,6 +25,22 @@
   --mono: "JetBrains Mono", monospace;
 }
 
+.theme-ucl {
+  --bg: #03081c;
+  --fg: #f0f6ff;
+  --surface: #071130;
+  --raised: #0e1e4d;
+  --card: #0a163b;
+  --pri: #1d4ed8;
+  --pri-bright: #38bdf8;
+  --pri-fg: #f0f9ff;
+  --muted: #93b4db;
+  --border: #1e3a7a;
+  --accent: #132a63;
+  background-color: #03081c;
+  background-image: radial-gradient(circle at 50% 0%, #0f255e 0%, #050d2a 55%, #020617 100%);
+}
+
 html, body {
   background-color: var(--bg);
   background-image: radial-gradient(circle at 50% 0%, #0d131a 0%, #050709 70%);

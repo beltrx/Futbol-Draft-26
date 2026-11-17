@@ -1,4 +1,6 @@
 import React from 'react';
+import { CLUB_STADIUMS } from '../data/database';
+import { UCL_BRAND_LOGOS } from '../data/logos';
 import { isPeerReadyForPhase } from '../services/onlineNet';
 import type {
   DraftState,
@@ -7,6 +9,7 @@ import type {
   NetStateSnapshot,
   TournamentState,
 } from '../types/game';
+import { getUclWeekTitle } from '../utils/careerLogic';
 import { getActiveTournamentMatch } from '../utils/matchEngine';
 import { OnlineReadyBadges, TeamIdentityBadge } from './ClubBadge';
 
@@ -36,8 +39,10 @@ export const MatchView: React.FC<MatchViewProps> = ({
   onBackAfterMatch,
 }) => {
   const isCareer = !!draft.m.career;
+  const isUcl = Boolean(isCareer && (league?.isUcl || league?.leagueName === 'Şampiyonlar Ligi'));
   const teamA = draft.teams[match.a];
   const teamB = draft.teams[match.b];
+  const stadiumName = teamA ? CLUB_STADIUMS[teamA.name] : undefined;
   const finished = match.run === 0 && match.min >= match.plan.maxMin;
   const activeTourneyMatch = !isCareer ? getActiveTournamentMatch(tournament) : null;
 
@@ -114,8 +119,52 @@ export const MatchView: React.FC<MatchViewProps> = ({
         </div>
       )}
 
-      <div className="rounded-2xl border border-[var(--border)] bg-gradient-to-br from-[#0f151c] to-[#080b0f] p-5 shadow-xl">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
+      <div
+        className={`relative overflow-hidden rounded-2xl border p-5 shadow-xl ${
+          isUcl
+            ? 'border-blue-500/40 bg-gradient-to-br from-[#07143a] via-[#040d28] to-[#020617]'
+            : 'border-[var(--border)] bg-gradient-to-br from-[#0f151c] to-[#080b0f]'
+        }`}
+      >
+        {isUcl && (
+          <img
+            src={UCL_BRAND_LOGOS.starballWhite}
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-10 -top-12 h-64 w-64 select-none object-contain opacity-[0.06]"
+          />
+        )}
+
+        {(isUcl || stadiumName) && (
+          <div className="relative z-10 mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2.5 text-[11px]">
+            <div className="flex items-center gap-2">
+              {isUcl && (
+                <>
+                  <img
+                    src={UCL_BRAND_LOGOS.starballWhite}
+                    alt="UEFA Champions League"
+                    className="h-4 w-4 object-contain"
+                  />
+                  <span className="font-extrabold uppercase tracking-wider text-sky-300">
+                    UEFA Şampiyonlar Ligi · {getUclWeekTitle(currentMatchWeek)}
+                  </span>
+                </>
+              )}
+              {!isUcl && isCareer && league && (
+                <span className="font-bold uppercase tracking-wider text-[var(--muted)]">
+                  {league.leagueName} · Hafta {currentMatchWeek}
+                </span>
+              )}
+            </div>
+            {stadiumName && (
+              <span className="rounded-md border border-white/10 bg-black/35 px-2.5 py-0.5 text-[10px] font-semibold text-slate-300">
+                🏟 {stadiumName}
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="relative z-10 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
           <div className="flex min-w-0 items-center justify-end gap-3 text-right">
             <div className="min-w-0">
               <div className="truncate font-disp text-lg font-extrabold text-white sm:text-xl">
@@ -151,6 +200,19 @@ export const MatchView: React.FC<MatchViewProps> = ({
             </div>
           </div>
         </div>
+
+        {isUcl && (
+          <div className="relative z-10 mt-3.5 flex flex-wrap items-center justify-center gap-4 rounded-xl border border-blue-400/20 bg-[#02081b]/70 px-3 py-1.5">
+            <span className="text-[9px] font-extrabold uppercase tracking-widest text-blue-200/60">
+              Resmi Sponsorlar
+            </span>
+            {UCL_BRAND_LOGOS.sponsors.map((sp) => (
+              <div key={sp.name} className="flex items-center gap-1.5 opacity-85">
+                <img src={sp.logo} alt={sp.name} className="h-3.5 w-auto max-w-[54px] object-contain" />
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2 border-t border-[var(--border)] pt-3">
           {!finished && (

@@ -738,6 +738,76 @@ export const DATA: Record<string, [string, number][]> = {
     ['Samir El Mourabet', 84], ['Giovanni Reyna', 80], ['Benjamin Brantlind', 76], ['Martial Godo', 79],
     ['Sebastian Nanasi', 82], ['Conrad Harder', 81], ['Deivid Washington', 80],
   ],
+  'Slovan Bratislava': [
+    ['Dominik Takac', 70], ['Svetozar Markovic', 69], ['Kenan Bajric', 67], ['Kevin Wimmer', 73],
+    ['Sandro Cruz', 71], ['César Blackman', 70], ['Peter Pokorný', 72], ['Rahim Ibrahim', 68],
+    ['Daiki Matsuoka', 68], ['Nino Marcelli', 75], ['Alasana Yirajang', 68], ['Suleiman Camara', 71],
+    ['Tigran Barseghyan', 71], ['Andraz Sporar', 77],
+  ],
+  'Real Betis': [
+    ['Álvaro Valles', 77], ['Natan', 82], ['Valentín Gómez', 79], ['Diego Llorente', 73],
+    ['Fran García', 76], ['Junior Firpo', 74], ['Ángel Ortiz', 76], ['Héctor Bellerín', 72],
+    ['Facundo Bernal', 78], ['Marc Roca', 72], ['Nelson Deossa', 74], ['Pablo Fornals', 76],
+    ['Dani Ceballos', 75], ['Álvaro Fidalgo', 80], ['Giovani Lo Celso', 81], ['Isco', 82],
+    ['Abde Ezzalzouli', 84], ['Rodrigo Riquelme', 75], ['Antony', 84], ['Troy Parrott', 83],
+  ],
+  'LASK': [
+    ['Lukas Jungwirth', 77], ['Xavier Mbuyamba', 75], ['João Tornich', 76], ['Andrés Andrade', 78],
+    ['Miguel Freckleton', 73], ['George Bello', 73], ['Yvan Dibango', 75], ['Kasper Jørgensen', 78],
+    ['Melayro Bogarde', 77], ['Robert Ljubicic', 76], ['Sascha Horvath', 79], ['Alessandro Schöpf', 75],
+    ['Florian Flecker', 74], ['Krystof Danek', 80], ['Moses Usor', 80], ['Samuel Adeniran', 78],
+    ['Sasa Kalajdzic', 82], ['Christoph Lang', 79], ['Ramiz Harakaté', 75],
+  ],
+  'Shakhtar Donetsk': [
+    ['Dmytro Riznyk', 74], ['Mykola Matvienko', 79], ['Valeriy Bondar', 78], ['Alan Matturro', 81],
+    ['Marlon', 76], ['Pedro Henrique', 75], ['Vinícius Tobias', 77], ['Oleksandr Karavaev', 71],
+    ['Marlon Gomes', 73], ['Dmytro Kryskiv', 69], ['Isaque', 68], ['Oleg Ocheretko', 67],
+    ['Newerton', 77], ['Eguinaldo', 75], ['Alisson Santana', 79], ['Gabriel Carvalho', 71],
+    ['Pedrinho', 77], ['Lucas Ferreira', 73], ['Kauã Elias', 78], ['Luca Meirelles', 76],
+    ['Lassina Traoré', 80],
+  ],
+  'Viking': [
+    ['Lubomir Belko', 75], ['Henrik Falchener', 83], ['Gianni Stensness', 78], ['Jesper Daland', 77],
+    ['Vetle Auklend', 75], ['Kristoffer Haugen', 74], ['Henrik Heggheim', 80], ['Herman Haugen', 79],
+    ['Sondre Bjørshol', 78], ['Joe Bell', 78], ['Tobias Moi', 76], ['Kristoffer Askildsen', 80],
+    ['Simen Kvia-Egeskog', 79], ['Henrik Bjørdal', 79], ['Zlatko Tripic', 83], ['Niklas Fuglestad', 75],
+    ['Peter Christiansen', 77], ['Erik Botheim', 77], ['Nick D\'Agostino', 72], ['Veton Berisha', 69],
+  ],
+  'AEK Atina': [
+    ['Thomas Strakosha', 75], ['Harold Moukoudi', 74], ['Filipe Relvas', 73], ['Domagoj Vida', 75],
+    ['Stavro Pilo', 72], ['Charalampos Lykogiannis', 77], ['Lazaros Rota', 76], ['Kervin Arriaga', 76],
+    ['Kaan Kairinen', 78], ['Răzvan Marin', 78], ['Milán Vitális', 75], ['Lovro Majer', 79],
+    ['Mijat Gacinovic', 75], ['João Mário', 80], ['Aboubakary Koita', 71], ['Oleksandr Zubkov', 73],
+    ['Luka Jović', 81], ['Barnabás Varga', 78],
+  ],
+  'Sabah': [
+    ['Stas Pokatilov', 66], ['Steve Solvet', 67], ['Aden McCarthy', 65], ['Tymoteusz Puchacz', 74],
+    ['Akim Zedadka', 70], ['Ivan Lepinjica', 70], ['Umarali Rakhmonaliev', 65], ['Du Queiroz', 69],
+    ['Aleksey Isayev', 64], ['Khayal Aliyev', 65], ['Joy-Lance Mickels', 67], ['Veljko Simic', 73],
+    ['Christian Nwachukwu', 72], ['Kaheem Parris', 70],
+  ],
+  'Lens': [
+    ['Robin Risser', 84], ['Ismaëlo Ganiou', 79], ['Samson Baidoo', 82], ['Jean-Clair Todibo', 80],
+    ['Kyllian Antonio', 78], ['Nidal Celik', 79], ['Matthieu Udol', 77], ['Saud Abdulhamid', 81],
+    ['Yacine Titraoui', 75], ['Andrija Bulatovic', 75], ['Michaël Cuisance', 76], ['Amadou Haidara', 77],
+    ['Thorgan Hazard', 72], ['Abdallah Sima', 78], ['Michał Skóraś', 80], ['Junior Kadile', 80],
+    ['Florian Thauvin', 81], ['Franjo Ivanović', 81], ['Odsonne Édouard', 81], ['Florian Sotoca', 80],
+  ],
+  'Slavia Prag': [
+    ['Nazar Domchak', 75], ['Stepan Chaloupek', 74], ['David Zima', 77], ['Igoh Ogbu', 78],
+    ['Ange N\'Guessan', 79], ['Tomas Holes', 79], ['David Jurásek', 77], ['Samuel Isife', 74],
+    ['David Moses', 74], ['Michal Sadílek', 76], ['Wiktor Nowak', 73], ['Lukas Provod', 75],
+    ['Danijel Sturm', 78], ['Emmanuel Ayaosi', 74], ['Ivan Schranz', 82], ['Mojmír Chytil', 80],
+    ['Tomas Chory', 80],
+  ],
+  'Lille': [
+    ['Berke Özer', 80], ['Orlando Gill', 78], ['Nathan Ngoy', 83], ['Alexsandro', 80],
+    ['Tanguy Nianzou', 81], ['Romain Perraud', 80], ['Tiago Santos', 82], ['Loun Srdanovic', 76],
+    ['Ngal\'ayel Mukau', 76], ['Nabil Bentaleb', 77], ['Benjamin André', 78], ['Maurits Kjærgaard', 81],
+    ['Hákon Arnar Haraldsson', 80], ['Başar Önal', 75], ['Osame Sahraoui', 76], ['Soriba Diaoune', 77],
+    ['Dilane Bakwa', 78], ['Ethan Mbappé', 73], ['Ayase Ueda', 80], ['Hamza Igamane', 79],
+    ['Olivier Giroud', 81],
+  ],
 };
 
 export const CLUB_TO_LEAGUE: Record<string, string> = {
@@ -762,11 +832,12 @@ export const CLUB_TO_LEAGUE: Record<string, string> = {
   'Newcastle United': 'Premier Lig',
   'Nottingham Forest': 'Premier Lig',
   'Sunderland': 'Premier Lig',
-  // La Liga (4)
+  // La Liga (5)
   'Real Madrid': 'La Liga',
   'Barcelona': 'La Liga',
   'Atletico Madrid': 'La Liga',
   'Villarreal': 'La Liga',
+  'Real Betis': 'La Liga',
   // Serie A (20)
   'Como': 'Serie A',
   'Inter': 'Serie A',
@@ -807,10 +878,12 @@ export const CLUB_TO_LEAGUE: Record<string, string> = {
   'Schalke': 'Bundesliga',
   'Elversberg': 'Bundesliga',
   'Paderborn': 'Bundesliga',
-  // Ligue 1 (3)
+  // Ligue 1 (5)
   'PSG': 'Ligue 1',
   'Monaco': 'Ligue 1',
   'Strasbourg': 'Ligue 1',
+  'Lille': 'Ligue 1',
+  'Lens': 'Ligue 1',
   // Liga Portugal (3)
   'Porto': 'Liga Portugal',
   'Benfica': 'Liga Portugal',
@@ -824,7 +897,7 @@ export const CLUB_TO_LEAGUE: Record<string, string> = {
   'Fenerbahce': 'Trendyol Süper Lig',
   'Besiktas': 'Trendyol Süper Lig',
   'Trabzonspor': 'Trendyol Süper Lig',
-  // Diğer Takımlar (9)
+  // Diğer Takımlar (16)
   'West Ham United': 'Diğer Takımlar',
   'Club Brugge': 'Diğer Takımlar',
   'RB Salzburg': 'Diğer Takımlar',
@@ -834,6 +907,13 @@ export const CLUB_TO_LEAGUE: Record<string, string> = {
   'Rangers': 'Diğer Takımlar',
   'Flamengo': 'Diğer Takımlar',
   'River Plate': 'Diğer Takımlar',
+  'Slovan Bratislava': 'Diğer Takımlar',
+  'LASK': 'Diğer Takımlar',
+  'Shakhtar Donetsk': 'Diğer Takımlar',
+  'Viking': 'Diğer Takımlar',
+  'AEK Atina': 'Diğer Takımlar',
+  'Sabah': 'Diğer Takımlar',
+  'Slavia Prag': 'Diğer Takımlar',
   // İkonik Takımlar (18)
   'Real Madrid 2016-17': 'İkonik Takımlar',
   'Real Madrid 2001-02': 'İkonik Takımlar',
@@ -940,6 +1020,16 @@ export const PS: Record<string, string> = {
   'Rangers': 'GDDDDMMMMFFFFF',
   'Flamengo': 'GGDDDDDDMMMMMMMFFFFF',
   'River Plate': 'GDDDDDDMMMMMFFFF',
+  'Slovan Bratislava': 'GDDDDDMMMFFMFF',
+  'Real Betis': 'GDDDDDDDMMMMMMMMFFFF',
+  'LASK': 'GDDDDDDDMMMMMMFFFFF',
+  'Shakhtar Donetsk': 'GDDDDDDDMMMMFFMMMFFFF',
+  'Viking': 'GDDDDDDDDMMMMMFFFFFF',
+  'AEK Atina': 'GDDDDDDMMMMMMMFFFF',
+  'Sabah': 'GDDDDMMMMMFFFF',
+  'Lens': 'GDDDDDDDMMMMMFFFFFFF',
+  'Slavia Prag': 'GDDDDDDDMMMMMFFFF',
+  'Lille': 'GGDDDDDDMMMMMFFFFMFFF',
   'Real Madrid 2016-17': 'GDDDDDDDDMMMMMMMFFFF',
   'Real Madrid 2001-02': 'GDDDDMMMMMFFFF',
   'Barcelona 2014-15': 'GGDDDDDDDMMMMMMFFFF',
@@ -1099,8 +1189,8 @@ export const MODES: GameModeDef[] = [
   {
     id: 'career',
     name: 'Lig Kariyer Modu',
-    tag: '★ YENİ MOD · Premier Lig, Bundesliga & Serie A',
-    d: '360 M€ bütçeyle kadronu kur; Premier Lig (20 takım · 38 hafta), Bundesliga (18 takım · 34 hafta) veya Serie A (20 takım · 38 hafta) maratonunda şampiyonluk mücadelesi ver!',
+    tag: '★ YENİ MOD · Şampiyonlar Ligi, Premier Lig, Bundesliga & Serie A',
+    d: '360 M€ bütçeyle kadronu kur; 36 takımlı yeni format UEFA Şampiyonlar Ligi, Premier Lig, Bundesliga veya Serie A maratonunda şampiyonluk mücadelesi ver!',
     clubs: 'optional',
     cpu: 'best',
     budget: 360,
@@ -1143,14 +1233,127 @@ export const CUSTOM_SHAPES: { id: IdentityShape; name: string }[] = [
   { id: 'star', name: 'Yıldızlı Arma' },
 ];
 
+export interface UclPotClubEntry {
+  pot: 1 | 2 | 3 | 4;
+  club: string;
+  country: string;
+  coeff: string;
+  coeffNum: number;
+  note?: string;
+}
+
+export const UCL_POTS_CONFIG: UclPotClubEntry[] = [
+  // 1. Torba
+  { pot: 1, club: 'PSG', country: 'Fransa', coeff: '132,000', coeffNum: 132.0, note: 'ŞL' },
+  { pot: 1, club: 'Bayern Munchen', country: 'Almanya', coeff: '147,500', coeffNum: 147.5 },
+  { pot: 1, club: 'Real Madrid', country: 'İspanya', coeff: '144,500', coeffNum: 144.5 },
+  { pot: 1, club: 'Liverpool', country: 'İngiltere', coeff: '130,000', coeffNum: 130.0 },
+  { pot: 1, club: 'Inter', country: 'İtalya', coeff: '127,000', coeffNum: 127.0 },
+  { pot: 1, club: 'Manchester City', country: 'İngiltere', coeff: '125,500', coeffNum: 125.5 },
+  { pot: 1, club: 'Arsenal', country: 'İngiltere', coeff: '119,000', coeffNum: 119.0 },
+  { pot: 1, club: 'Barcelona', country: 'İspanya', coeff: '113,250', coeffNum: 113.25 },
+  { pot: 1, club: 'Atletico Madrid', country: 'İspanya', coeff: '104,750', coeffNum: 104.75 },
+  // 2. Torba
+  { pot: 2, club: 'Borussia Dortmund', country: 'Almanya', coeff: '100,750', coeffNum: 100.75 },
+  { pot: 2, club: 'Roma', country: 'İtalya', coeff: '97,750', coeffNum: 97.75 },
+  { pot: 2, club: 'Sporting', country: 'Portekiz', coeff: '84,000', coeffNum: 84.0 },
+  { pot: 2, club: 'Aston Villa', country: 'İngiltere', coeff: '83,000', coeffNum: 83.0 },
+  { pot: 2, club: 'Porto', country: 'Portekiz', coeff: '80,750', coeffNum: 80.75 },
+  { pot: 2, club: 'Manchester United', country: 'İngiltere', coeff: '76,500', coeffNum: 76.5 },
+  { pot: 2, club: 'Club Brugge', country: 'Belçika', coeff: '75,250', coeffNum: 75.25 },
+  { pot: 2, club: 'Real Betis', country: 'İspanya', coeff: '74,500', coeffNum: 74.5 },
+  { pot: 2, club: 'PSV', country: 'Hollanda', coeff: '71,250', coeffNum: 71.25 },
+  // 3. Torba
+  { pot: 3, club: 'Feyenoord', country: 'Hollanda', coeff: '71,000', coeffNum: 71.0 },
+  { pot: 3, club: 'Lille', country: 'Fransa', coeff: '68,750', coeffNum: 68.75 },
+  { pot: 3, club: 'Bodo Glimt', country: 'Norveç', coeff: '64,000', coeffNum: 64.0, note: 'PO' },
+  { pot: 3, club: 'Napoli', country: 'İtalya', coeff: '63,000', coeffNum: 63.0 },
+  { pot: 3, club: 'RB Leipzig', country: 'Almanya', coeff: '61,000', coeffNum: 61.0 },
+  { pot: 3, club: 'Villarreal', country: 'İspanya', coeff: '59,000', coeffNum: 59.0 },
+  { pot: 3, club: 'Fenerbahce', country: 'Türkiye', coeff: '57,750', coeffNum: 57.75, note: 'PO' },
+  { pot: 3, club: 'Shakhtar Donetsk', country: 'Ukrayna', coeff: '56,250', coeffNum: 56.25 },
+  { pot: 3, club: 'Galatasaray', country: 'Türkiye', coeff: '53,500', coeffNum: 53.5 },
+  // 4. Torba
+  { pot: 4, club: 'Slavia Prag', country: 'Çekya', coeff: '44,000', coeffNum: 44.0 },
+  { pot: 4, club: 'Slovan Bratislava', country: 'Slovakya', coeff: '36,000', coeffNum: 36.0, note: 'PO' },
+  { pot: 4, club: 'Stuttgart', country: 'Almanya', coeff: '27,500', coeffNum: 27.5 },
+  { pot: 4, club: 'AEK Atina', country: 'Yunanistan', coeff: '24,000', coeffNum: 24.0, note: 'PO' },
+  { pot: 4, club: 'LASK', country: 'Avusturya', coeff: '21,000', coeffNum: 21.0, note: 'PO' },
+  { pot: 4, club: 'Como', country: 'İtalya', coeff: '19,989', coeffNum: 19.989 },
+  { pot: 4, club: 'Lens', country: 'Fransa', coeff: '16,699', coeffNum: 16.699 },
+  { pot: 4, club: 'Viking', country: 'Norveç', coeff: '8,247', coeffNum: 8.247, note: 'PO' },
+  { pot: 4, club: 'Sabah', country: 'Azerbaycan', coeff: '6,000', coeffNum: 6.0, note: 'PO' },
+];
+
+export const CLUB_STADIUMS: Record<string, string> = {
+  // 1. Torba
+  'PSG': 'Parc des Princes',
+  'Bayern Munchen': 'Allianz Arena',
+  'Real Madrid': 'Santiago Bernabéu',
+  'Liverpool': 'Anfield',
+  'Inter': 'Giuseppe Meazza (San Siro)',
+  'Manchester City': 'Etihad Stadium',
+  'Arsenal': 'Emirates Stadium',
+  'Barcelona': 'Spotify Camp Nou',
+  'Atletico Madrid': 'Riyadh Air Metropolitano',
+  // 2. Torba
+  'Borussia Dortmund': 'Signal Iduna Park',
+  'Roma': 'Stadio Olimpico',
+  'Sporting': 'Estádio José Alvalade',
+  'Aston Villa': 'Villa Park',
+  'Porto': 'Estádio do Dragão',
+  'Manchester United': 'Old Trafford',
+  'Club Brugge': 'Jan Breydel Stadyumu',
+  'Real Betis': 'Estadio Benito Villamarín',
+  'PSV': 'Philips Stadion',
+  // 3. Torba
+  'Feyenoord': 'De Kuip',
+  'Lille': 'Decathlon Arena (Pierre-Mauroy)',
+  'Bodo Glimt': 'Aspmyra Stadion',
+  'Napoli': 'Stadio Diego Armando Maradona',
+  'RB Leipzig': 'Red Bull Arena',
+  'Villarreal': 'Estadio de la Cerámica',
+  'Fenerbahce': 'Ülker Stadyumu',
+  'Shakhtar Donetsk': 'Donbass Arena / Veltins-Arena',
+  'Galatasaray': 'RAMS Park',
+  // 4. Torba
+  'Slavia Prag': 'Fortuna Arena',
+  'Slovan Bratislava': 'Tehelné pole',
+  'Stuttgart': 'MHPArena',
+  'AEK Atina': 'OPAP Arena (Agia Sofia)',
+  'LASK': 'Raiffeisen Arena',
+  'Como': 'Stadio Giuseppe Sinigaglia',
+  'Lens': 'Stade Bollaert-Delelis',
+  'Viking': 'SR-Bank Arena',
+  'Sabah': 'Bank Respublika Arena',
+  // Diğer Büyük Kulüpler
+  'Chelsea': 'Stamford Bridge',
+  'Tottenham': 'Tottenham Hotspur Stadium',
+  'Newcastle United': 'St. James\' Park',
+  'Juventus': 'Allianz Stadium',
+  'Milan': 'San Siro',
+  'Atalanta': 'Gewiss Stadium',
+  'Lazio': 'Stadio Olimpico',
+  'Fiorentina': 'Stadio Artemio Franchi',
+  'Bayer Leverkusen': 'BayArena',
+  'Eintracht Frankfurt': 'Deutsche Bank Park',
+  'Benfica': 'Estádio da Luz',
+  'Ajax': 'Johan Cruijff ArenA',
+  'Besiktas': 'Tüpraş Stadyumu',
+  'Trabzonspor': 'Papara Park',
+  'Monaco': 'Stade Louis-II',
+  'Strasbourg': 'Stade de la Meinau',
+};
+
 export const CAREER_LEAGUES_PREVIEW = [
+  { id: 'Şampiyonlar Ligi', name: 'Şampiyonlar Ligi', country: 'Avrupa (UEFA)', teams: 36, active: true, note: '36 Takım · 4 Torba · 8 Maç Lig + Play-Off & Eleme' },
   { id: 'Premier Lig', name: 'Premier Lig', country: 'İngiltere', teams: 20, active: true, note: '20 Takım · 38 Hafta Tam Sezon' },
   { id: 'Bundesliga', name: 'Bundesliga', country: 'Almanya', teams: 18, active: true, note: '18 Takım · 34 Hafta Tam Sezon' },
   { id: 'Serie A', name: 'Serie A', country: 'İtalya', teams: 20, active: true, note: '20 Takım · 38 Hafta Tam Sezon' },
-  { id: 'La Liga', name: 'La Liga', country: 'İspanya', teams: 4, active: false, note: 'Sonra Gelecek (Yeterli Takım Yok)' },
+  { id: 'La Liga', name: 'La Liga', country: 'İspanya', teams: 5, active: false, note: 'Sonra Gelecek (Yeterli Takım Yok)' },
+  { id: 'Ligue 1', name: 'Ligue 1', country: 'Fransa', teams: 5, active: false, note: 'Sonra Gelecek (Yeterli Takım Yok)' },
   { id: 'Trendyol Süper Lig', name: 'Trendyol Süper Lig', country: 'Türkiye', teams: 4, active: false, note: 'Sonra Gelecek (Yeterli Takım Yok)' },
   { id: 'Liga Portugal', name: 'Liga Portugal', country: 'Portekiz', teams: 3, active: false, note: 'Sonra Gelecek (Yeterli Takım Yok)' },
   { id: 'Eredivisie', name: 'Eredivisie', country: 'Hollanda', teams: 3, active: false, note: 'Sonra Gelecek (Yeterli Takım Yok)' },
-  { id: 'Ligue 1', name: 'Ligue 1', country: 'Fransa', teams: 3, active: false, note: 'Sonra Gelecek (Yeterli Takım Yok)' },
 ];
 

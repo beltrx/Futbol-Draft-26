@@ -669,11 +669,22 @@ export function finalizeMatchState(
   const B = teams[m.b];
 
   if (isCareerMatch) {
+    if (m.sc[0] === m.sc[1] && m.plan.goesToPenalties && m.plan.penaltyData) {
+      const pd = m.plan.penaltyData;
+      m.penSc = [...pd.score] as [number, number];
+      m.log.push({
+        min: 120,
+        isGoal: true,
+        isRed: false,
+        text: `120 Dakika Berabere Bitti (${m.sc[0]} - ${m.sc[1]}) · Seri Penaltı Atışları Sonucu: ${A.name} ${m.penSc[0]} - ${m.penSc[1]} ${B.name}`,
+      });
+    }
+    const penNote = m.penSc ? ` (Pen: ${m.penSc[0]}-${m.penSc[1]})` : '';
     m.log.push({
-      min: 90,
+      min: m.plan.maxMin || 90,
       isGoal: true,
       isRed: false,
-      text: `Lig Maçı Tamamlandı: ${A.name} ${m.sc[0]} - ${m.sc[1]} ${B.name} · Haftanın diğer lig maçları da simüle edildi.`,
+      text: `Maç Tamamlandı: ${A.name} ${m.sc[0]} - ${m.sc[1]} ${B.name}${penNote} · Haftanın diğer maçları da simüle edildi.`,
     });
     return;
   }

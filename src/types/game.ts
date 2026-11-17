@@ -222,6 +222,9 @@ export interface LeagueFixture {
   b: number;
   done: boolean;
   sc: [number, number] | null;
+  pen?: [number, number] | null;
+  winner?: number | null;
+  stageLabel?: string;
   redCards?: { teamIdx: number; playerId: number; playerName: string }[];
 }
 
@@ -290,7 +293,17 @@ export interface TeamCareerState {
   eventHistory: CareerEventHistoryItem[];
 }
 
-export type LeagueTab = 'standings' | 'fixtures' | 'leaders' | 'news';
+export type LeagueTab = 'standings' | 'fixtures' | 'leaders' | 'news' | 'pots' | 'bracket';
+
+export interface UclPotTeamMeta {
+  teamIdx: number;
+  pot: 1 | 2 | 3 | 4;
+  club: string;
+  country: string;
+  coeff: string;
+  coeffNum: number;
+  note?: string;
+}
 
 export interface LeagueState {
   leagueName: string;
@@ -317,6 +330,9 @@ export interface LeagueState {
   teamCareer?: Record<number, TeamCareerState>;
   newsFeed: CareerNewsItem[];
   tab: LeagueTab;
+  isUcl?: boolean;
+  uclPots?: UclPotTeamMeta[];
+  uclChampionTeamIdx?: number | null;
 }
 
 export type AppView =

@@ -1,4 +1,4 @@
-import { ALL_CLUBS, CLUB_TO_LEAGUE, DATA, PLAYERS_POOL } from '../data/database';
+import { ALL_CLUBS, CLUB_TO_LEAGUE, DATA, PLAYERS_POOL, UCL_POTS_CONFIG } from '../data/database';
 import type {
   CareerEvent,
   CareerNewsItem,
@@ -12,6 +12,7 @@ import type {
   StandingsRow,
   Team,
   TeamCareerState,
+  UclPotTeamMeta,
 } from '../types/game';
 import {
   enforceHealthyStartersForTeam,
@@ -610,6 +611,134 @@ export function selectPremierLeagueRivalClubs(excludeTeamName: string): string[]
   return selectPremierLeagueAiClubs(1, excludeTeamName ? [excludeTeamName] : []);
 }
 
+export function getUclWeekTitle(week: number): string {
+  if (week <= 8) return `${week}. Hafta · Lig Aşaması`;
+  if (week === 9) return 'Play-Off Eleme Turu (9-24)';
+  if (week === 10) return 'Son 16 Turu';
+  if (week === 11) return 'Çeyrek Final';
+  if (week === 12) return 'Yarı Final';
+  if (week === 13) return 'Şampiyonlar Ligi Finali';
+  return 'Turnuva Tamamlandı';
+}
+
+function shuffleNums(arr: number[]): number[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = (Math.random() * (i + 1)) | 0;
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/**
+ * Generates the 8-week UEFA Champions League Swiss schedule for 36 teams (4 pots of 9 teams).
+ * Every team plays 8 matches (1 per week): exactly 2 opponents from Pot 1, 2 from Pot 2, 2 from Pot 3, and 2 from Pot 4.
+ * Also appends 5 empty rounds (weeks 9..13) for Play-Off, R16, QF, SF, and Final.
+ */
+export function generateUclLeaguePhaseSchedule(uclPots: UclPotTeamMeta[]): LeagueFixture[][] {
+  const P1 = shuffleNums(uclPots.filter((x) => x.pot === 1).map((x) => x.teamIdx));
+  const P2 = shuffleNums(uclPots.filter((x) => x.pot === 2).map((x) => x.teamIdx));
+  const P3 = shuffleNums(uclPots.filter((x) => x.pot === 3).map((x) => x.teamIdx));
+  const P4 = shuffleNums(uclPots.filter((x) => x.pot === 4).map((x) => x.teamIdx));
+
+  const mkMatch = (a: number, b: number, label: string): LeagueFixture => ({
+    a,
+    b,
+    done: false,
+    sc: null,
+    stageLabel: label,
+  });
+
+  const bipartiteTwoRounds = (A: number[], B: number[], lblA: string, lblB: string): [LeagueFixture[], LeagueFixture[]] => {
+    const r0: LeagueFixture[] = [];
+    const r1: LeagueFixture[] = [];
+    for (let i = 0; i < 9; i++) {
+      r0.push(mkMatch(A[i], B[i], lblA));
+      r1.push(mkMatch(B[(i + 1) % 9], A[i], lblB));
+    }
+    return [r0, r1];
+  };
+
+  const intraAndCrossFourRounds = (A: number[], B: number[], lbl: string): LeagueFixture[][] => {
+    // k = 0: Intra (0-1, 3-4, 6-7), Cross (2, 5, 8)
+    const r0: LeagueFixture[] = [
+      mkMatch(A[0], A[1], lbl),
+      mkMatch(A[3], A[4], lbl),
+      mkMatch(A[6], A[7], lbl),
+      mkMatch(B[0], B[1], lbl),
+      mkMatch(B[3], B[4], lbl),
+      mkMatch(B[6], B[7], lbl),
+      mkMatch(A[2], B[2], lbl),
+      mkMatch(B[5], A[5], lbl),
+      mkMatch(A[8], B[8], lbl),
+    ];
+    // k = 1: Intra (1-2, 4-5, 7-8), Cross (0, 3, 6)
+    const r1: LeagueFixture[] = [
+      mkMatch(A[1], A[2], lbl),
+      mkMatch(A[4], A[5], lbl),
+      mkMatch(A[7], A[8], lbl),
+      mkMatch(B[1], B[2], lbl),
+      mkMatch(B[4], B[5], lbl),
+      mkMatch(B[7], B[8], lbl),
+      mkMatch(B[0], A[0], lbl),
+      mkMatch(A[3], B[3], lbl),
+      mkMatch(B[6], A[6], lbl),
+    ];
+    // k = 2: Intra (2-3, 5-6, 8-0), Cross (1, 4, 7)
+    const r2: LeagueFixture[] = [
+      mkMatch(A[2], A[3], lbl),
+      mkMatch(A[5], A[6], lbl),
+      mkMatch(A[8], A[0], lbl),
+      mkMatch(B[2], B[3], lbl),
+      mkMatch(B[5], B[6], lbl),
+      mkMatch(B[8], B[0], lbl),
+      mkMatch(A[1], B[1], lbl),
+      mkMatch(B[4], A[4], lbl),
+      mkMatch(A[7], B[7], lbl),
+    ];
+    // k = 3: 2nd Cross match between A[i] and B[(i+1)%9]
+    const r3: LeagueFixture[] = [];
+    for (let i = 0; i < 9; i++) {
+      if (i % 2 === 0) {
+        r3.push(mkMatch(B[(i + 1) % 9], A[i], lbl));
+      } else {
+        r3.push(mkMatch(A[i], B[(i + 1) % 9], lbl));
+      }
+    }
+    return [r0, r1, r2, r3];
+  };
+
+  const [p12_a, p12_b] = bipartiteTwoRounds(P1, P2, 'Lig Aşaması', 'Lig Aşaması');
+  const [p34_a, p34_b] = bipartiteTwoRounds(P3, P4, 'Lig Aşaması', 'Lig Aşaması');
+  const [p13_a, p13_b] = bipartiteTwoRounds(P1, P3, 'Lig Aşaması', 'Lig Aşaması');
+  const [p24_a, p24_b] = bipartiteTwoRounds(P2, P4, 'Lig Aşaması', 'Lig Aşaması');
+  const p14_rounds = intraAndCrossFourRounds(P1, P4, 'Lig Aşaması');
+  const p23_rounds = intraAndCrossFourRounds(P2, P3, 'Lig Aşaması');
+
+  const eightRounds: LeagueFixture[][] = [
+    [...p12_a, ...p34_a],
+    [...p12_b, ...p34_b],
+    [...p13_a, ...p24_a],
+    [...p13_b, ...p24_b],
+    [...p14_rounds[0], ...p23_rounds[0]],
+    [...p14_rounds[1], ...p23_rounds[1]],
+    [...p14_rounds[2], ...p23_rounds[2]],
+    [...p14_rounds[3], ...p23_rounds[3]],
+  ];
+
+  // Shuffle the order of the 8 league phase matchdays
+  const order = shuffleNums([0, 1, 2, 3, 4, 5, 6, 7]);
+  const leaguePhase = order.map((idx, wIdx) =>
+    eightRounds[idx].map((m) => ({
+      ...m,
+      stageLabel: `${wIdx + 1}. Hafta · Lig Aşaması`,
+    }))
+  );
+
+  // Append 5 knockout rounds: Week 9 (Play-Off), Week 10 (R16), Week 11 (QF), Week 12 (SF), Week 13 (Final)
+  return [...leaguePhase, [], [], [], [], []];
+}
+
 export function initCareerLeague(
   existingTeams: Team[],
   budgetTotal: number | null,
@@ -624,13 +753,77 @@ export function initCareerLeague(
     }
   );
 
-  const aiClubs = selectCareerAiClubs(
-    leagueName,
-    humanTeams.length,
-    humanTeams.map((t) => t.name)
-  );
-  const aiTeams = aiClubs.map(buildClubTeamObject);
-  const allTeams = [...humanTeams, ...aiTeams];
+  const isUcl = leagueName === 'Şampiyonlar Ligi';
+  let allTeams: Team[] = [];
+  let uclPots: UclPotTeamMeta[] | undefined;
+
+  if (isUcl) {
+    // Match human teams to UCL_POTS_CONFIG slots (by club name or replacing lowest Pot 4 clubs)
+    const claimedPotIndices = new Set<number>();
+    const humanPotAssignments: { humanIdx: number; configIdx: number }[] = [];
+
+    humanTeams.forEach((hTeam, hIdx) => {
+      const exactIdx = UCL_POTS_CONFIG.findIndex(
+        (cfg, cIdx) =>
+          !claimedPotIndices.has(cIdx) &&
+          (cfg.club.toLowerCase() === hTeam.name.trim().toLowerCase() ||
+            (hTeam.customIdentity?.club && cfg.club.toLowerCase() === hTeam.customIdentity.club.toLowerCase()))
+      );
+      if (exactIdx >= 0) {
+        claimedPotIndices.add(exactIdx);
+        humanPotAssignments.push({ humanIdx: hIdx, configIdx: exactIdx });
+      } else {
+        // Replace lowest-coefficient unclaimed slot in Pot 4
+        for (let cIdx = UCL_POTS_CONFIG.length - 1; cIdx >= 0; cIdx--) {
+          if (!claimedPotIndices.has(cIdx)) {
+            claimedPotIndices.add(cIdx);
+            humanPotAssignments.push({ humanIdx: hIdx, configIdx: cIdx });
+            break;
+          }
+        }
+      }
+    });
+
+    const aiConfigEntries = UCL_POTS_CONFIG.map((cfg, cIdx) => ({ cfg, cIdx })).filter(
+      ({ cIdx }) => !claimedPotIndices.has(cIdx)
+    );
+    const aiTeams = aiConfigEntries.map(({ cfg }) => buildClubTeamObject(cfg.club));
+    allTeams = [...humanTeams, ...aiTeams];
+
+    uclPots = [];
+    humanPotAssignments.forEach(({ humanIdx, configIdx }) => {
+      const cfg = UCL_POTS_CONFIG[configIdx];
+      uclPots!.push({
+        teamIdx: humanIdx,
+        pot: cfg.pot,
+        club: humanTeams[humanIdx].name,
+        country: cfg.club.toLowerCase() === humanTeams[humanIdx].name.trim().toLowerCase() ? cfg.country : 'Avrupa',
+        coeff: cfg.coeff,
+        coeffNum: cfg.coeffNum,
+        note: cfg.note,
+      });
+    });
+    aiConfigEntries.forEach(({ cfg }, aiOffset) => {
+      uclPots!.push({
+        teamIdx: humanTeams.length + aiOffset,
+        pot: cfg.pot,
+        club: cfg.club,
+        country: cfg.country,
+        coeff: cfg.coeff,
+        coeffNum: cfg.coeffNum,
+        note: cfg.note,
+      });
+    });
+    uclPots.sort((a, b) => a.pot - b.pot || b.coeffNum - a.coeffNum);
+  } else {
+    const aiClubs = selectCareerAiClubs(
+      leagueName,
+      humanTeams.length,
+      humanTeams.map((t) => t.name)
+    );
+    const aiTeams = aiClubs.map(buildClubTeamObject);
+    allTeams = [...humanTeams, ...aiTeams];
+  }
 
   const standings: StandingsRow[] = allTeams.map((_tm, idx) => ({
     teamIdx: idx,
@@ -643,7 +836,7 @@ export function initCareerLeague(
     pts: 0,
   }));
 
-  const maxWeeks = (allTeams.length - 1) * 2; // 38 weeks for 20 teams (PL), 34 weeks for 18 teams (Bundesliga)
+  const maxWeeks = isUcl ? 13 : (allTeams.length - 1) * 2;
   const humanNamesLabel = humanTeams.map((t) => t.name).join(' ve ');
 
   const teamCareer: Record<number, TeamCareerState> = {};
@@ -659,12 +852,16 @@ export function initCareerLeague(
     };
   });
 
+  const schedule = isUcl && uclPots
+    ? generateUclLeaguePhaseSchedule(uclPots)
+    : generateDoubleRoundRobinSchedule(allTeams.length);
+
   const league: LeagueState = {
     leagueName,
     week: 1,
     maxWeeks,
     viewWeek: 1,
-    schedule: generateDoubleRoundRobinSchedule(allTeams.length),
+    schedule,
     standings,
     playerStats: {},
     injuries: {},
@@ -681,15 +878,26 @@ export function initCareerLeague(
     eventHistory: [],
     teamCareer,
     newsFeed: [
-      {
-        week: 1,
-        source: `${leagueName} Medya Merkezi`,
-        teamIdx: 0,
-        title: `2026-27 ${leagueName} ${maxWeeks} Haftalık Tam Sezon Başlıyor!`,
-        body: `${allTeams.length} takımlı ${maxWeeks} haftalık çift devreli maratonda ${humanNamesLabel} yeni kurulan kadrosuyla şampiyonluk yarışına katılıyor. İç saha ve deplasman rövanşlarıyla dolu uzun sezonda kart cezaları ve form grafiği belirleyici olacak.`,
-      },
+      isUcl
+        ? {
+            week: 1,
+            source: 'UEFA Şampiyonlar Ligi · Nyon Kura Merkezi',
+            teamIdx: 0,
+            title: '36 Takımlı Yeni Format UEFA Şampiyonlar Ligi Başlıyor!',
+            body: `4 torbadan 36 Avrupa devinin yer aldığı yeni Şampiyonlar Ligi formatında her takım her torbadan 2'şer rakiple toplam 8 maç oynayacak. İlk 8 doğrudan Son 16'ya yükselirken, 9-24. sıradaki takımlar Play-Off (9-23, 10-24, 11-21, 12-22...) oynayacak!`,
+          }
+        : {
+            week: 1,
+            source: `${leagueName} Medya Merkezi`,
+            teamIdx: 0,
+            title: `2026-27 ${leagueName} ${maxWeeks} Haftalık Tam Sezon Başlıyor!`,
+            body: `${allTeams.length} takımlı ${maxWeeks} haftalık çift devreli maratonda ${humanNamesLabel} yeni kurulan kadrosuyla şampiyonluk yarışına katılıyor. İç saha ve deplasman rövanşlarıyla dolu uzun sezonda kart cezaları ve form grafiği belirleyici olacak.`,
+          },
     ],
     tab: 'standings',
+    isUcl,
+    uclPots,
+    uclChampionTeamIdx: null,
   };
 
   return { teams: allTeams, league };
@@ -859,17 +1067,153 @@ export function simulateBackgroundLeagueMatch(
         : (tm.starters && tm.starters[1]) || null;
       if (offender) {
         mObj.redCards!.push({ teamIdx: idx, playerId: offender.id, playerName: offender.n });
-        // Note: will be applied into lg.suspensions AFTER previous week's bans are decremented
-        if (completedWeek > 0) {
-          // Recorded on mObj.redCards for caller to apply after week rollover
-        }
       }
     }
   });
 
-  updateLeagueTableForMatch(lg, mObj.a, mObj.b, gA, gB);
+  const isKnockoutWeek = !!lg.isUcl && completedWeek > 8;
+  if (isKnockoutWeek) {
+    if (gA === gB) {
+      const penWinSide = sA.avg + (Math.random() - 0.5) * 4 >= sB.avg ? 0 : 1;
+      const penPairs: [number, number][] = [
+        [5, 4],
+        [4, 3],
+        [5, 3],
+        [4, 2],
+      ];
+      const pat = penPairs[(Math.random() * penPairs.length) | 0];
+      mObj.pen = penWinSide === 0 ? [pat[0], pat[1]] : [pat[1], pat[0]];
+      mObj.winner = penWinSide === 0 ? mObj.a : mObj.b;
+    } else {
+      mObj.winner = gA > gB ? mObj.a : mObj.b;
+    }
+  } else {
+    updateLeagueTableForMatch(lg, mObj.a, mObj.b, gA, gB);
+  }
   recordLeagueGoalsAndAssists(lg, teams, mObj.a, sA, gA);
   recordLeagueGoalsAndAssists(lg, teams, mObj.b, sB, gB);
+}
+
+function getFixtureWinnerIdx(m: LeagueFixture): number {
+  if (m.winner != null) return m.winner;
+  if (m.sc) {
+    if (m.sc[0] > m.sc[1]) return m.a;
+    if (m.sc[1] > m.sc[0]) return m.b;
+  }
+  if (m.pen) {
+    return m.pen[0] >= m.pen[1] ? m.a : m.b;
+  }
+  return m.a;
+}
+
+/**
+ * Generates the next UEFA Champions League knockout round when a week >= 8 finishes.
+ * - Week 8 -> Week 9 (Play-Off: 9v23, 10v24, 11v21, 12v22, 13v19, 14v20, 15v17, 16v18)
+ * - Week 9 -> Week 10 (Round of 16: Top 8 vs Play-Off Winners)
+ * - Week 10 -> Week 11 (Quarter-Finals)
+ * - Week 11 -> Week 12 (Semi-Finals)
+ * - Week 12 -> Week 13 (Final)
+ * - Week 13 -> Sets uclChampionTeamIdx
+ */
+export function populateNextUclKnockoutRound(
+  lg: LeagueState,
+  teams: Team[],
+  completedWeek: number
+): void {
+  if (!lg.isUcl) return;
+
+  if (completedWeek === 8) {
+    const st = getSortedStandings(lg);
+    if (st.length < 24) return;
+    // Exact pairings requested by user:
+    // 9 vs 23, 10 vs 24, 11 vs 21, 12 vs 22, 13 vs 19, 14 vs 20, 15 vs 17, 16 vs 18
+    const pairs: [number, number, string][] = [
+      [8, 22, 'Play-Off · 9. vs 23.'],
+      [9, 23, 'Play-Off · 10. vs 24.'],
+      [10, 20, 'Play-Off · 11. vs 21.'],
+      [11, 21, 'Play-Off · 12. vs 22.'],
+      [12, 18, 'Play-Off · 13. vs 19.'],
+      [13, 19, 'Play-Off · 14. vs 20.'],
+      [14, 16, 'Play-Off · 15. vs 17.'],
+      [15, 17, 'Play-Off · 16. vs 18.'],
+    ];
+    lg.schedule[8] = pairs.map(([rA, rB, label]) => ({
+      a: st[rA].teamIdx,
+      b: st[rB].teamIdx,
+      done: false,
+      sc: null,
+      stageLabel: label,
+    }));
+    lg.newsFeed.unshift({
+      week: 8,
+      source: 'UEFA Şampiyonlar Ligi · Kura Merkezi',
+      teamIdx: null,
+      title: 'Lig Aşaması Tamamlandı! İlk 8 Son 16’da, 9-24 Play-Off Eşleşmeleri Belli Oldu!',
+      body: `8 haftalık lig maratonu sona erdi. İlk 8 sıradaki takımlar doğrudan Son 16 turuna yükselirken, 9-24. sıradaki 16 takım Play-Off turunda kozlarını paylaşacak.`,
+      effectBadge: 'Play-Off Kurası Çekildi',
+      effectPositive: true,
+    });
+  } else if (completedWeek === 9) {
+    const st = getSortedStandings(lg);
+    const po = lg.schedule[8] || [];
+    if (st.length < 8 || po.length < 8) return;
+    const r16Pairs: [number, number, string][] = [
+      [st[0].teamIdx, getFixtureWinnerIdx(po[7]), 'Son 16 · 1. Sıra vs Play-Off Galibi'],
+      [st[7].teamIdx, getFixtureWinnerIdx(po[0]), 'Son 16 · 8. Sıra vs Play-Off Galibi'],
+      [st[3].teamIdx, getFixtureWinnerIdx(po[4]), 'Son 16 · 4. Sıra vs Play-Off Galibi'],
+      [st[4].teamIdx, getFixtureWinnerIdx(po[3]), 'Son 16 · 5. Sıra vs Play-Off Galibi'],
+      [st[1].teamIdx, getFixtureWinnerIdx(po[6]), 'Son 16 · 2. Sıra vs Play-Off Galibi'],
+      [st[6].teamIdx, getFixtureWinnerIdx(po[1]), 'Son 16 · 7. Sıra vs Play-Off Galibi'],
+      [st[2].teamIdx, getFixtureWinnerIdx(po[5]), 'Son 16 · 3. Sıra vs Play-Off Galibi'],
+      [st[5].teamIdx, getFixtureWinnerIdx(po[2]), 'Son 16 · 6. Sıra vs Play-Off Galibi'],
+    ];
+    lg.schedule[9] = r16Pairs.map(([a, b, label]) => ({
+      a,
+      b,
+      done: false,
+      sc: null,
+      stageLabel: label,
+    }));
+  } else if (completedWeek === 10) {
+    const r16 = lg.schedule[9] || [];
+    if (r16.length < 8) return;
+    lg.schedule[10] = [
+      { a: getFixtureWinnerIdx(r16[0]), b: getFixtureWinnerIdx(r16[1]), done: false, sc: null, stageLabel: 'Çeyrek Final 1' },
+      { a: getFixtureWinnerIdx(r16[2]), b: getFixtureWinnerIdx(r16[3]), done: false, sc: null, stageLabel: 'Çeyrek Final 2' },
+      { a: getFixtureWinnerIdx(r16[4]), b: getFixtureWinnerIdx(r16[5]), done: false, sc: null, stageLabel: 'Çeyrek Final 3' },
+      { a: getFixtureWinnerIdx(r16[6]), b: getFixtureWinnerIdx(r16[7]), done: false, sc: null, stageLabel: 'Çeyrek Final 4' },
+    ];
+  } else if (completedWeek === 11) {
+    const qf = lg.schedule[10] || [];
+    if (qf.length < 4) return;
+    lg.schedule[11] = [
+      { a: getFixtureWinnerIdx(qf[0]), b: getFixtureWinnerIdx(qf[1]), done: false, sc: null, stageLabel: 'Yarı Final 1' },
+      { a: getFixtureWinnerIdx(qf[2]), b: getFixtureWinnerIdx(qf[3]), done: false, sc: null, stageLabel: 'Yarı Final 2' },
+    ];
+  } else if (completedWeek === 12) {
+    const sf = lg.schedule[11] || [];
+    if (sf.length < 2) return;
+    lg.schedule[12] = [
+      { a: getFixtureWinnerIdx(sf[0]), b: getFixtureWinnerIdx(sf[1]), done: false, sc: null, stageLabel: 'Şampiyonlar Ligi Finali' },
+    ];
+  } else if (completedWeek === 13) {
+    const fin = lg.schedule[12]?.[0];
+    if (fin) {
+      const champIdx = getFixtureWinnerIdx(fin);
+      lg.uclChampionTeamIdx = champIdx;
+      const champName = teams[champIdx]?.name || 'Şampiyon';
+      lg.newsFeed.unshift({
+        week: 13,
+        source: 'UEFA Şampiyonlar Ligi · Büyük Final',
+        clubLogoName: champName,
+        teamIdx: champIdx,
+        title: `AVRUPA'NIN EN BÜYÜĞÜ ${champName.toUpperCase()}!`,
+        body: `UEFA Şampiyonlar Ligi Finali'nde rakibini mağlup eden ${champName}, Devler Ligi kupasını müzesine götürdü!`,
+        effectBadge: 'ŞAMPİYON',
+        effectPositive: true,
+      });
+    }
+  }
 }
 
 export function modifyRivalPlayerRating(
@@ -1757,12 +2101,15 @@ export function finalizeCareerWeekAfterUserMatch(
   scB: number,
   goalsListA: MatchGoalEntry[],
   goalsListB: MatchGoalEntry[],
-  matchPlayerStats: Record<number, MatchPlayerStat>
+  matchPlayerStats: Record<number, MatchPlayerStat>,
+  penSc: [number, number] | null = null
 ): void {
   if (!lg || lg.week > lg.maxWeeks) return;
   const completedWeek = lg.week;
   const roundMatches = lg.schedule[completedWeek - 1];
   if (!roundMatches) return;
+
+  const isKnockoutWeek = !!lg.isUcl && completedWeek > 8;
 
   const userMatch = roundMatches.find(
     (m) =>
@@ -1776,7 +2123,21 @@ export function finalizeCareerWeekAfterUserMatch(
     const sB = isDirectOrder ? scB : scA;
     userMatch.sc = [sA, sB];
     userMatch.redCards = [];
-    updateLeagueTableForMatch(lg, userMatch.a, userMatch.b, sA, sB);
+    if (isKnockoutWeek) {
+      if (penSc) {
+        const pA = isDirectOrder ? penSc[0] : penSc[1];
+        const pB = isDirectOrder ? penSc[1] : penSc[0];
+        userMatch.pen = [pA, pB];
+        userMatch.winner = pA >= pB ? userMatch.a : userMatch.b;
+      } else if (sA === sB) {
+        userMatch.pen = [5, 4];
+        userMatch.winner = userMatch.a;
+      } else {
+        userMatch.winner = sA > sB ? userMatch.a : userMatch.b;
+      }
+    } else {
+      updateLeagueTableForMatch(lg, userMatch.a, userMatch.b, sA, sB);
+    }
 
     // Record lastResult independently for any human team involved in this fixture
     if (teams[userMatch.a]?.isHuman) {
@@ -1873,6 +2234,10 @@ export function finalizeCareerWeekAfterUserMatch(
     if (!m.done) simulateBackgroundLeagueMatch(lg, teams, m, completedWeek);
   });
 
+  if (lg.isUcl && completedWeek >= 8) {
+    populateNextUclKnockoutRound(lg, teams, completedWeek);
+  }
+
   // 1) Decrement prior bans/injuries served during completedWeek BEFORE applying new bans
   advanceCareerStatusOneWeek(lg);
 
@@ -1887,7 +2252,7 @@ export function finalizeCareerWeekAfterUserMatch(
     });
   });
 
-  // 3) Advance week counter & enforce healthy starters across ALL 20 teams for next week
+  // 3) Advance week counter & enforce healthy starters across ALL teams for next week
   lg.viewWeek = completedWeek;
   lg.week++;
   teams.forEach((tm) => {
@@ -1900,13 +2265,48 @@ export function finalizeCareerWeekAfterUserMatch(
   triggerWeeklyTeamNews(lg, teams, roundMatches, completedWeek);
 }
 
+/**
+ * Simulates a single career week when no human team has a match in that week
+ * (e.g., human team finished Top 8 in UCL and has a bye during Week 9 Play-Off, or was eliminated).
+ */
+export function simulateSingleCareerWeek(lg: LeagueState, teams: Team[]): void {
+  if (!lg || lg.week > lg.maxWeeks) return;
+  const cw = lg.week;
+  const roundMatches = lg.schedule[cw - 1] || [];
+  roundMatches.forEach((m) => {
+    if (!m.done) simulateBackgroundLeagueMatch(lg, teams, m, cw);
+  });
+  if (lg.isUcl && cw >= 8) {
+    populateNextUclKnockoutRound(lg, teams, cw);
+  }
+  advanceCareerStatusOneWeek(lg);
+  roundMatches.forEach((m) => {
+    (m.redCards || []).forEach((rc) => {
+      const tm = teams[rc.teamIdx];
+      const pl = tm?.picks.find((p) => p.id === rc.playerId);
+      if (pl) suspendPlayerForRedCard(lg, teams, rc.teamIdx, pl, 1);
+    });
+  });
+  teams.forEach((tm) => {
+    ensureTeamLineup(tm, lg, true);
+    enforceHealthyStartersForTeam(tm, lg, true);
+  });
+  const matchNews = generateDynamicMatchHeadline(teams, roundMatches, cw, lg.leagueName);
+  if (matchNews) lg.newsFeed.unshift(matchNews);
+  lg.viewWeek = cw;
+  lg.week++;
+}
+
 export function simulateRestOfLeagueSeason(lg: LeagueState, teams: Team[]): void {
   while (lg.week <= lg.maxWeeks) {
     const cw = lg.week;
-    const roundMatches = lg.schedule[cw - 1];
+    const roundMatches = lg.schedule[cw - 1] || [];
     roundMatches.forEach((m) => {
       if (!m.done) simulateBackgroundLeagueMatch(lg, teams, m, cw);
     });
+    if (lg.isUcl && cw >= 8) {
+      populateNextUclKnockoutRound(lg, teams, cw);
+    }
     advanceCareerStatusOneWeek(lg);
     roundMatches.forEach((m) => {
       (m.redCards || []).forEach((rc) => {
@@ -1919,7 +2319,7 @@ export function simulateRestOfLeagueSeason(lg: LeagueState, teams: Team[]): void
       ensureTeamLineup(tm, lg, true);
       enforceHealthyStartersForTeam(tm, lg, true);
     });
-    const matchNews = generateDynamicMatchHeadline(teams, roundMatches, cw);
+    const matchNews = generateDynamicMatchHeadline(teams, roundMatches, cw, lg.leagueName);
     if (matchNews) lg.newsFeed.unshift(matchNews);
     lg.viewWeek = cw;
     lg.week++;
