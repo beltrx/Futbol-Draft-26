@@ -52,6 +52,8 @@ export const DraftView: React.FC<DraftViewProps> = ({
   const [leagueFilter, setLeagueFilter] = useState('');
   const [clubFilter, setClubFilter] = useState('');
   const [posFilter, setPosFilter] = useState<'' | Position>('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 40;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const done = draft.k >= draft.order.length;
@@ -132,6 +134,13 @@ export const DraftView: React.FC<DraftViewProps> = ({
       .filter((p) => !q || p.n.toLowerCase().includes(q) || p.c.toLowerCase().includes(q))
       .sort((a, b) => a.n.localeCompare(b.n, 'tr'));
   }, [draft.pool, draft.taken, leagueFilter, clubFilter, posFilter, searchQ]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPool.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedPool = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE;
+    return filteredPool.slice(start, start + PAGE_SIZE);
+  }, [filteredPool, safePage]);
 
   const counts = activeTeam ? posCountsOf(activeTeam) : { GK: 0, DEF: 0, MID: 0, FWD: 0 };
   const budgetLeft =
@@ -382,7 +391,10 @@ export const DraftView: React.FC<DraftViewProps> = ({
                 id="draft-search"
                 type="text"
                 value={searchQ}
-                onChange={(e) => setSearchQ(e.target.value)}
+                onChange={(e) => {
+                  setSearchQ(e.target.value);
+                  setPage(1);
+                }}
                 placeholder="Oyuncu veya kulüp ara (A-Z sıralı)..."
                 className="min-w-[180px] flex-1 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-xs text-[var(--fg)] focus:border-[var(--pri-bright)] focus:outline-none"
               />
@@ -396,6 +408,7 @@ export const DraftView: React.FC<DraftViewProps> = ({
                 onChange={(e) => {
                   setLeagueFilter(e.target.value);
                   setClubFilter('');
+                  setPage(1);
                 }}
                 className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 py-1.5 text-xs text-[var(--fg)]"
               >
@@ -413,7 +426,10 @@ export const DraftView: React.FC<DraftViewProps> = ({
               <select
                 id="draft-club-filter"
                 value={clubFilter}
-                onChange={(e) => setClubFilter(e.target.value)}
+                onChange={(e) => {
+                  setClubFilter(e.target.value);
+                  setPage(1);
+                }}
                 className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 py-1.5 text-xs text-[var(--fg)]"
               >
                 <option value="">Tüm Kulüpler</option>
@@ -425,30 +441,57 @@ export const DraftView: React.FC<DraftViewProps> = ({
               </select>
             </div>
 
-            <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Mevki Filtresi">
-              {(
-                [
-                  ['', 'Tümü'],
-                  ['GK', 'KL'],
-                  ['DEF', 'DF'],
-                  ['MID', 'OS'],
-                  ['FWD', 'FV'],
-                ] as const
-              ).map(([val, label]) => (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Mevki Filtresi">
+                {(
+                  [
+                    ['', 'Tümü'],
+                    ['GK', 'KL'],
+                    ['DEF', 'DF'],
+                    ['MID', 'OS'],
+                    ['FWD', 'FV'],
+                  ] as const
+                ).map(([val, label]) => (
+                  <button
+                    key={val || 'ALL'}
+                    type="button"
+                    aria-pressed={posFilter === val}
+                    onClick={() => {
+                      setPosFilter(val);
+                      setPage(1);
+                    }}
+                    className={`rounded-lg border px-2.5 py-1 text-xs font-bold transition ${
+                      posFilter === val
+                        ? 'border-[var(--pri-bright)] bg-[var(--pri)] text-white'
+                        : 'border-[var(--border)] bg-[var(--card)] text-[var(--muted)] hover:text-white'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                <span className="font-mono-tab text-[11px]">
+                  Toplam {filteredPool.length} Oyuncu · Sayfa {safePage}/{totalPages}
+                </span>
                 <button
-                  key={val || 'ALL'}
                   type="button"
-                  aria-pressed={posFilter === val}
-                  onClick={() => setPosFilter(val)}
-                  className={`rounded-lg border px-2.5 py-1 text-xs font-bold transition ${
-                    posFilter === val
-                      ? 'border-[var(--pri-bright)] bg-[var(--pri)] text-white'
-                      : 'border-[var(--border)] bg-[var(--card)] text-[var(--muted)] hover:text-white'
-                  }`}
+                  disabled={safePage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 py-1 text-[11px] font-bold text-[var(--fg)] transition hover:bg-[var(--raised)] disabled:opacity-40"
                 >
-                  {label}
+                  ‹ Önceki
                 </button>
-              ))}
+                <button
+                  type="button"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 py-1 text-[11px] font-bold text-[var(--fg)] transition hover:bg-[var(--raised)] disabled:opacity-40"
+                >
+                  Sonraki ›
+                </button>
+              </div>
             </div>
 
             <div className="max-h-[520px] overflow-y-auto rounded-xl border border-[var(--border)]">
@@ -463,7 +506,7 @@ export const DraftView: React.FC<DraftViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)] bg-[var(--card)]">
-                  {filteredPool.map((p) => {
+                  {pagedPool.map((p) => {
                     const posAllowed =
                       done || !activeTeam
                         ? false
@@ -519,6 +562,51 @@ export const DraftView: React.FC<DraftViewProps> = ({
                 </tbody>
               </table>
             </div>
+
+            {totalPages > 1 && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--muted)]">
+                <span className="font-mono-tab text-[11px]">
+                  {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filteredPool.length)} / {filteredPool.length} oyuncu gösteriliyor
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={safePage <= 1}
+                    onClick={() => setPage(1)}
+                    className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-2 py-1 text-[11px] font-semibold text-[var(--fg)] disabled:opacity-40"
+                  >
+                    « İlk
+                  </button>
+                  <button
+                    type="button"
+                    disabled={safePage <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 py-1 text-[11px] font-bold text-[var(--fg)] disabled:opacity-40"
+                  >
+                    ‹ Önceki
+                  </button>
+                  <span className="px-2 font-mono-tab text-[11px] font-bold text-[var(--fg)]">
+                    {safePage} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 py-1 text-[11px] font-bold text-[var(--fg)] disabled:opacity-40"
+                  >
+                    Sonraki ›
+                  </button>
+                  <button
+                    type="button"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setPage(totalPages)}
+                    className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-2 py-1 text-[11px] font-semibold text-[var(--fg)] disabled:opacity-40"
+                  >
+                    Son »
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

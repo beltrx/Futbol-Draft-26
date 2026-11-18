@@ -8,6 +8,9 @@ import type {
   MatchPlayerStat,
   Player,
   Position,
+  PressConferenceAskedQuestion,
+  PressConferenceQuestionDef,
+  PressConferenceState,
   SideEvaluation,
   StandingsRow,
   Team,
@@ -613,12 +616,24 @@ export function selectPremierLeagueRivalClubs(excludeTeamName: string): string[]
 
 export function getUclWeekTitle(week: number): string {
   if (week <= 8) return `${week}. Hafta · Lig Aşaması`;
-  if (week === 9) return 'Play-Off Eleme Turu (9-24)';
-  if (week === 10) return 'Son 16 Turu';
-  if (week === 11) return 'Çeyrek Final';
-  if (week === 12) return 'Yarı Final';
-  if (week === 13) return 'Şampiyonlar Ligi Finali';
+  if (week === 9) return 'Play-Off Eleme Turu · 1. Maç';
+  if (week === 10) return 'Play-Off Eleme Turu · Rövanş';
+  if (week === 11) return 'Son 16 Turu · 1. Maç';
+  if (week === 12) return 'Son 16 Turu · Rövanş';
+  if (week === 13) return 'Çeyrek Final · 1. Maç';
+  if (week === 14) return 'Çeyrek Final · Rövanş';
+  if (week === 15) return 'Yarı Final · 1. Maç';
+  if (week === 16) return 'Yarı Final · Rövanş';
+  if (week === 17) return 'Şampiyonlar Ligi Finali';
   return 'Turnuva Tamamlandı';
+}
+
+export function isUclFirstLegWeek(week: number): boolean {
+  return week === 9 || week === 11 || week === 13 || week === 15;
+}
+
+export function isUclSecondLegWeek(week: number): boolean {
+  return week === 10 || week === 12 || week === 14 || week === 16;
 }
 
 function shuffleNums(arr: number[]): number[] {
@@ -633,7 +648,7 @@ function shuffleNums(arr: number[]): number[] {
 /**
  * Generates the 8-week UEFA Champions League Swiss schedule for 36 teams (4 pots of 9 teams).
  * Every team plays 8 matches (1 per week): exactly 2 opponents from Pot 1, 2 from Pot 2, 2 from Pot 3, and 2 from Pot 4.
- * Also appends 5 empty rounds (weeks 9..13) for Play-Off, R16, QF, SF, and Final.
+ * Also appends 9 empty rounds (weeks 9..17) for two-legged Play-Off (9-10), R16 (11-12), QF (13-14), SF (15-16), and single-leg Final (17).
  */
 export function generateUclLeaguePhaseSchedule(uclPots: UclPotTeamMeta[]): LeagueFixture[][] {
   const P1 = shuffleNums(uclPots.filter((x) => x.pot === 1).map((x) => x.teamIdx));
@@ -735,8 +750,8 @@ export function generateUclLeaguePhaseSchedule(uclPots: UclPotTeamMeta[]): Leagu
     }))
   );
 
-  // Append 5 knockout rounds: Week 9 (Play-Off), Week 10 (R16), Week 11 (QF), Week 12 (SF), Week 13 (Final)
-  return [...leaguePhase, [], [], [], [], []];
+  // Append 9 knockout rounds: Weeks 9-10 (PO), Weeks 11-12 (R16), Weeks 13-14 (QF), Weeks 15-16 (SF), Week 17 (Final)
+  return [...leaguePhase, [], [], [], [], [], [], [], [], []];
 }
 
 export function initCareerLeague(
@@ -836,7 +851,7 @@ export function initCareerLeague(
     pts: 0,
   }));
 
-  const maxWeeks = isUcl ? 13 : (allTeams.length - 1) * 2;
+  const maxWeeks = isUcl ? 17 : (allTeams.length - 1) * 2;
   const humanNamesLabel = humanTeams.map((t) => t.name).join(' ve ');
 
   const teamCareer: Record<number, TeamCareerState> = {};
@@ -848,6 +863,7 @@ export function initCareerLeague(
       lastResult: null,
       usedEventIds: [],
       activeEvent: null,
+      activePressConference: null,
       eventHistory: [],
     };
   });
@@ -873,6 +889,7 @@ export function initCareerLeague(
     usedEventIds: new Set<string>(),
     usedNewsIds: new Set<string>(),
     activeEvent: null,
+    activePressConference: null,
     activeNews: null,
     pendingNewsAfterEvent: null,
     eventHistory: [],
@@ -884,7 +901,7 @@ export function initCareerLeague(
             source: 'UEFA Şampiyonlar Ligi · Nyon Kura Merkezi',
             teamIdx: 0,
             title: '36 Takımlı Yeni Format UEFA Şampiyonlar Ligi Başlıyor!',
-            body: `4 torbadan 36 Avrupa devinin yer aldığı yeni Şampiyonlar Ligi formatında her takım her torbadan 2'şer rakiple toplam 8 maç oynayacak. İlk 8 doğrudan Son 16'ya yükselirken, 9-24. sıradaki takımlar Play-Off (9-23, 10-24, 11-21, 12-22...) oynayacak!`,
+            body: `4 torbadan 36 Avrupa devinin yer aldığı yeni Şampiyonlar Ligi formatında her takım her torbadan 2'şer rakiple toplam 8 maç oynayacak. Lig aşaması sonunda ilk 8 takım doğrudan Son 16 turuna yükselirken, 9 ile 24. sıra arasındaki takımlar çift maçlı Play-Off eleme turunda mücadele edecek.`,
           }
         : {
             week: 1,
@@ -1073,19 +1090,50 @@ export function simulateBackgroundLeagueMatch(
 
   const isKnockoutWeek = !!lg.isUcl && completedWeek > 8;
   if (isKnockoutWeek) {
-    if (gA === gB) {
-      const penWinSide = sA.avg + (Math.random() - 0.5) * 4 >= sB.avg ? 0 : 1;
-      const penPairs: [number, number][] = [
-        [5, 4],
-        [4, 3],
-        [5, 3],
-        [4, 2],
-      ];
-      const pat = penPairs[(Math.random() * penPairs.length) | 0];
-      mObj.pen = penWinSide === 0 ? [pat[0], pat[1]] : [pat[1], pat[0]];
-      mObj.winner = penWinSide === 0 ? mObj.a : mObj.b;
+    if (isUclFirstLegWeek(completedWeek)) {
+      // 1st leg ends at 90 minutes (can be a draw, no penalties)
+      mObj.pen = null;
+      mObj.aggSc = null;
+      mObj.winner = gA > gB ? mObj.a : gB > gA ? mObj.b : null;
+    } else if (isUclSecondLegWeek(completedWeek)) {
+      // 2nd leg: compute aggregate score using firstLegSc
+      const fSc = mObj.firstLegSc || [0, 0];
+      const aggA = gA + fSc[0];
+      const aggB = gB + fSc[1];
+      mObj.aggSc = [aggA, aggB];
+      if (aggA === aggB) {
+        const penWinSide = sA.avg + (Math.random() - 0.5) * 4 >= sB.avg ? 0 : 1;
+        const penPairs: [number, number][] = [
+          [5, 4],
+          [4, 3],
+          [5, 3],
+          [4, 2],
+        ];
+        const pat = penPairs[(Math.random() * penPairs.length) | 0];
+        mObj.pen = penWinSide === 0 ? [pat[0], pat[1]] : [pat[1], pat[0]];
+        mObj.winner = penWinSide === 0 ? mObj.a : mObj.b;
+      } else {
+        mObj.pen = null;
+        mObj.winner = aggA > aggB ? mObj.a : mObj.b;
+      }
     } else {
-      mObj.winner = gA > gB ? mObj.a : mObj.b;
+      // Week 17: Single-match Final
+      mObj.aggSc = null;
+      if (gA === gB) {
+        const penWinSide = sA.avg + (Math.random() - 0.5) * 4 >= sB.avg ? 0 : 1;
+        const penPairs: [number, number][] = [
+          [5, 4],
+          [4, 3],
+          [5, 3],
+          [4, 2],
+        ];
+        const pat = penPairs[(Math.random() * penPairs.length) | 0];
+        mObj.pen = penWinSide === 0 ? [pat[0], pat[1]] : [pat[1], pat[0]];
+        mObj.winner = penWinSide === 0 ? mObj.a : mObj.b;
+      } else {
+        mObj.pen = null;
+        mObj.winner = gA > gB ? mObj.a : mObj.b;
+      }
     }
   } else {
     updateLeagueTableForMatch(lg, mObj.a, mObj.b, gA, gB);
@@ -1096,24 +1144,45 @@ export function simulateBackgroundLeagueMatch(
 
 function getFixtureWinnerIdx(m: LeagueFixture): number {
   if (m.winner != null) return m.winner;
-  if (m.sc) {
-    if (m.sc[0] > m.sc[1]) return m.a;
-    if (m.sc[1] > m.sc[0]) return m.b;
+  if (m.aggSc) {
+    if (m.aggSc[0] > m.aggSc[1]) return m.a;
+    if (m.aggSc[1] > m.aggSc[0]) return m.b;
   }
   if (m.pen) {
     return m.pen[0] >= m.pen[1] ? m.a : m.b;
   }
+  if (m.sc) {
+    if (m.sc[0] > m.sc[1]) return m.a;
+    if (m.sc[1] > m.sc[0]) return m.b;
+  }
   return m.a;
+}
+
+function createSecondLegFixtures(firstLegMatches: LeagueFixture[], stagePrefix: string): LeagueFixture[] {
+  return firstLegMatches.map((m) => ({
+    a: m.b,
+    b: m.a,
+    done: false,
+    sc: null,
+    leg: 2,
+    firstLegSc: m.sc ? [m.sc[1], m.sc[0]] : [0, 0],
+    aggSc: null,
+    stageLabel: `${stagePrefix} · Rövanş`,
+  }));
 }
 
 /**
  * Generates the next UEFA Champions League knockout round when a week >= 8 finishes.
- * - Week 8 -> Week 9 (Play-Off: 9v23, 10v24, 11v21, 12v22, 13v19, 14v20, 15v17, 16v18)
- * - Week 9 -> Week 10 (Round of 16: Top 8 vs Play-Off Winners)
- * - Week 10 -> Week 11 (Quarter-Finals)
- * - Week 11 -> Week 12 (Semi-Finals)
- * - Week 12 -> Week 13 (Final)
- * - Week 13 -> Sets uclChampionTeamIdx
+ * - Week 8 -> Week 9 (Play-Off 1st Leg)
+ * - Week 9 -> Week 10 (Play-Off 2nd Leg / Rövanş)
+ * - Week 10 -> Week 11 (Round of 16 1st Leg: Top 8 vs Play-Off Winners)
+ * - Week 11 -> Week 12 (Round of 16 2nd Leg / Rövanş)
+ * - Week 12 -> Week 13 (Quarter-Finals 1st Leg)
+ * - Week 13 -> Week 14 (Quarter-Finals 2nd Leg / Rövanş)
+ * - Week 14 -> Week 15 (Semi-Finals 1st Leg)
+ * - Week 15 -> Week 16 (Semi-Finals 2nd Leg / Rövanş)
+ * - Week 16 -> Week 17 (Single-Match Final)
+ * - Week 17 -> Sets uclChampionTeamIdx
  */
 export function populateNextUclKnockoutRound(
   lg: LeagueState,
@@ -1125,85 +1194,102 @@ export function populateNextUclKnockoutRound(
   if (completedWeek === 8) {
     const st = getSortedStandings(lg);
     if (st.length < 24) return;
-    // Exact pairings requested by user:
-    // 9 vs 23, 10 vs 24, 11 vs 21, 12 vs 22, 13 vs 19, 14 vs 20, 15 vs 17, 16 vs 18
-    const pairs: [number, number, string][] = [
-      [8, 22, 'Play-Off · 9. vs 23.'],
-      [9, 23, 'Play-Off · 10. vs 24.'],
-      [10, 20, 'Play-Off · 11. vs 21.'],
-      [11, 21, 'Play-Off · 12. vs 22.'],
-      [12, 18, 'Play-Off · 13. vs 19.'],
-      [13, 19, 'Play-Off · 14. vs 20.'],
-      [14, 16, 'Play-Off · 15. vs 17.'],
-      [15, 17, 'Play-Off · 16. vs 18.'],
+    // Play-Off pairings (9-24 seeded bracket)
+    const pairs: [number, number][] = [
+      [8, 22],
+      [9, 23],
+      [10, 20],
+      [11, 21],
+      [12, 18],
+      [13, 19],
+      [14, 16],
+      [15, 17],
     ];
-    lg.schedule[8] = pairs.map(([rA, rB, label]) => ({
+    lg.schedule[8] = pairs.map(([rA, rB]) => ({
       a: st[rA].teamIdx,
       b: st[rB].teamIdx,
       done: false,
       sc: null,
-      stageLabel: label,
+      leg: 1,
+      stageLabel: 'Play-Off · 1. Maç',
     }));
     lg.newsFeed.unshift({
       week: 8,
       source: 'UEFA Şampiyonlar Ligi · Kura Merkezi',
       teamIdx: null,
-      title: 'Lig Aşaması Tamamlandı! İlk 8 Son 16’da, 9-24 Play-Off Eşleşmeleri Belli Oldu!',
-      body: `8 haftalık lig maratonu sona erdi. İlk 8 sıradaki takımlar doğrudan Son 16 turuna yükselirken, 9-24. sıradaki 16 takım Play-Off turunda kozlarını paylaşacak.`,
+      title: 'Lig Aşaması Tamamlandı! İlk 8 Son 16’da, Play-Off Eşleşmeleri Belli Oldu!',
+      body: `8 haftalık lig maratonu sona erdi. İlk 8 sıradaki takımlar doğrudan Son 16 turuna yükselirken, 9 ile 24. sıra arasındaki 16 takım çift maçlı Play-Off eleme turunda kozlarını paylaşacak.`,
       effectBadge: 'Play-Off Kurası Çekildi',
       effectPositive: true,
     });
   } else if (completedWeek === 9) {
+    const poLeg1 = lg.schedule[8] || [];
+    if (poLeg1.length < 8) return;
+    lg.schedule[9] = createSecondLegFixtures(poLeg1, 'Play-Off');
+  } else if (completedWeek === 10) {
     const st = getSortedStandings(lg);
-    const po = lg.schedule[8] || [];
-    if (st.length < 8 || po.length < 8) return;
-    const r16Pairs: [number, number, string][] = [
-      [st[0].teamIdx, getFixtureWinnerIdx(po[7]), 'Son 16 · 1. Sıra vs Play-Off Galibi'],
-      [st[7].teamIdx, getFixtureWinnerIdx(po[0]), 'Son 16 · 8. Sıra vs Play-Off Galibi'],
-      [st[3].teamIdx, getFixtureWinnerIdx(po[4]), 'Son 16 · 4. Sıra vs Play-Off Galibi'],
-      [st[4].teamIdx, getFixtureWinnerIdx(po[3]), 'Son 16 · 5. Sıra vs Play-Off Galibi'],
-      [st[1].teamIdx, getFixtureWinnerIdx(po[6]), 'Son 16 · 2. Sıra vs Play-Off Galibi'],
-      [st[6].teamIdx, getFixtureWinnerIdx(po[1]), 'Son 16 · 7. Sıra vs Play-Off Galibi'],
-      [st[2].teamIdx, getFixtureWinnerIdx(po[5]), 'Son 16 · 3. Sıra vs Play-Off Galibi'],
-      [st[5].teamIdx, getFixtureWinnerIdx(po[2]), 'Son 16 · 6. Sıra vs Play-Off Galibi'],
+    const poLeg2 = lg.schedule[9] || [];
+    if (st.length < 8 || poLeg2.length < 8) return;
+    const r16Pairs: [number, number][] = [
+      [st[0].teamIdx, getFixtureWinnerIdx(poLeg2[7])],
+      [st[7].teamIdx, getFixtureWinnerIdx(poLeg2[0])],
+      [st[3].teamIdx, getFixtureWinnerIdx(poLeg2[4])],
+      [st[4].teamIdx, getFixtureWinnerIdx(poLeg2[3])],
+      [st[1].teamIdx, getFixtureWinnerIdx(poLeg2[6])],
+      [st[6].teamIdx, getFixtureWinnerIdx(poLeg2[1])],
+      [st[2].teamIdx, getFixtureWinnerIdx(poLeg2[5])],
+      [st[5].teamIdx, getFixtureWinnerIdx(poLeg2[2])],
     ];
-    lg.schedule[9] = r16Pairs.map(([a, b, label]) => ({
+    lg.schedule[10] = r16Pairs.map(([a, b]) => ({
       a,
       b,
       done: false,
       sc: null,
-      stageLabel: label,
+      leg: 1,
+      stageLabel: 'Son 16 · 1. Maç',
     }));
-  } else if (completedWeek === 10) {
-    const r16 = lg.schedule[9] || [];
-    if (r16.length < 8) return;
-    lg.schedule[10] = [
-      { a: getFixtureWinnerIdx(r16[0]), b: getFixtureWinnerIdx(r16[1]), done: false, sc: null, stageLabel: 'Çeyrek Final 1' },
-      { a: getFixtureWinnerIdx(r16[2]), b: getFixtureWinnerIdx(r16[3]), done: false, sc: null, stageLabel: 'Çeyrek Final 2' },
-      { a: getFixtureWinnerIdx(r16[4]), b: getFixtureWinnerIdx(r16[5]), done: false, sc: null, stageLabel: 'Çeyrek Final 3' },
-      { a: getFixtureWinnerIdx(r16[6]), b: getFixtureWinnerIdx(r16[7]), done: false, sc: null, stageLabel: 'Çeyrek Final 4' },
-    ];
   } else if (completedWeek === 11) {
-    const qf = lg.schedule[10] || [];
-    if (qf.length < 4) return;
-    lg.schedule[11] = [
-      { a: getFixtureWinnerIdx(qf[0]), b: getFixtureWinnerIdx(qf[1]), done: false, sc: null, stageLabel: 'Yarı Final 1' },
-      { a: getFixtureWinnerIdx(qf[2]), b: getFixtureWinnerIdx(qf[3]), done: false, sc: null, stageLabel: 'Yarı Final 2' },
-    ];
+    const r16Leg1 = lg.schedule[10] || [];
+    if (r16Leg1.length < 8) return;
+    lg.schedule[11] = createSecondLegFixtures(r16Leg1, 'Son 16');
   } else if (completedWeek === 12) {
-    const sf = lg.schedule[11] || [];
-    if (sf.length < 2) return;
+    const r16Leg2 = lg.schedule[11] || [];
+    if (r16Leg2.length < 8) return;
     lg.schedule[12] = [
-      { a: getFixtureWinnerIdx(sf[0]), b: getFixtureWinnerIdx(sf[1]), done: false, sc: null, stageLabel: 'Şampiyonlar Ligi Finali' },
+      { a: getFixtureWinnerIdx(r16Leg2[0]), b: getFixtureWinnerIdx(r16Leg2[1]), done: false, sc: null, leg: 1, stageLabel: 'Çeyrek Final · 1. Maç' },
+      { a: getFixtureWinnerIdx(r16Leg2[2]), b: getFixtureWinnerIdx(r16Leg2[3]), done: false, sc: null, leg: 1, stageLabel: 'Çeyrek Final · 1. Maç' },
+      { a: getFixtureWinnerIdx(r16Leg2[4]), b: getFixtureWinnerIdx(r16Leg2[5]), done: false, sc: null, leg: 1, stageLabel: 'Çeyrek Final · 1. Maç' },
+      { a: getFixtureWinnerIdx(r16Leg2[6]), b: getFixtureWinnerIdx(r16Leg2[7]), done: false, sc: null, leg: 1, stageLabel: 'Çeyrek Final · 1. Maç' },
     ];
   } else if (completedWeek === 13) {
-    const fin = lg.schedule[12]?.[0];
+    const qfLeg1 = lg.schedule[12] || [];
+    if (qfLeg1.length < 4) return;
+    lg.schedule[13] = createSecondLegFixtures(qfLeg1, 'Çeyrek Final');
+  } else if (completedWeek === 14) {
+    const qfLeg2 = lg.schedule[13] || [];
+    if (qfLeg2.length < 4) return;
+    lg.schedule[14] = [
+      { a: getFixtureWinnerIdx(qfLeg2[0]), b: getFixtureWinnerIdx(qfLeg2[1]), done: false, sc: null, leg: 1, stageLabel: 'Yarı Final · 1. Maç' },
+      { a: getFixtureWinnerIdx(qfLeg2[2]), b: getFixtureWinnerIdx(qfLeg2[3]), done: false, sc: null, leg: 1, stageLabel: 'Yarı Final · 1. Maç' },
+    ];
+  } else if (completedWeek === 15) {
+    const sfLeg1 = lg.schedule[14] || [];
+    if (sfLeg1.length < 2) return;
+    lg.schedule[15] = createSecondLegFixtures(sfLeg1, 'Yarı Final');
+  } else if (completedWeek === 16) {
+    const sfLeg2 = lg.schedule[15] || [];
+    if (sfLeg2.length < 2) return;
+    lg.schedule[16] = [
+      { a: getFixtureWinnerIdx(sfLeg2[0]), b: getFixtureWinnerIdx(sfLeg2[1]), done: false, sc: null, stageLabel: 'Şampiyonlar Ligi Finali' },
+    ];
+  } else if (completedWeek === 17) {
+    const fin = lg.schedule[16]?.[0];
     if (fin) {
       const champIdx = getFixtureWinnerIdx(fin);
       lg.uclChampionTeamIdx = champIdx;
       const champName = teams[champIdx]?.name || 'Şampiyon';
       lg.newsFeed.unshift({
-        week: 13,
+        week: 17,
         source: 'UEFA Şampiyonlar Ligi · Büyük Final',
         clubLogoName: champName,
         teamIdx: champIdx,
@@ -1480,6 +1566,7 @@ export function ensureTeamCareerState(lg: LeagueState, teamIdx: number): TeamCar
       lastResult: teamIdx === 0 ? lg.lastResult : null,
       usedEventIds: teamIdx === 0 ? [...lg.usedEventIds] : [],
       activeEvent: teamIdx === 0 ? lg.activeEvent : null,
+      activePressConference: teamIdx === 0 ? lg.activePressConference ?? null : null,
       eventHistory: teamIdx === 0 ? [...lg.eventHistory] : [],
     };
   }
@@ -1494,6 +1581,7 @@ export function syncTopLevelCareerMirrorForTeam0(lg: LeagueState): void {
   lg.moraleMod = tc0.moraleMod;
   lg.lastResult = tc0.lastResult;
   lg.activeEvent = tc0.activeEvent;
+  lg.activePressConference = tc0.activePressConference ?? null;
   lg.eventHistory = [...tc0.eventHistory];
   lg.usedEventIds = new Set(tc0.usedEventIds);
 }
@@ -2093,6 +2181,542 @@ export function triggerWeeklyCareerEvent(lg: LeagueState, teams: Team[], force =
   });
 }
 
+export const PRESS_CONFERENCE_MEDIA = [
+  'Sky Sports',
+  'BBC Sport',
+  'The Athletic',
+  'The Guardian',
+  'talkSPORT',
+  'Daily Mail',
+] as const;
+
+export function buildPressConferenceCatalog(
+  teamName: string,
+  oppName: string,
+  starName: string,
+  rank: number,
+  lastScoreText: string
+): PressConferenceQuestionDef[] {
+  return [
+    {
+      id: 'pc_match_eval',
+      question: `${oppName} karşısında alınan ${lastScoreText} sonucu sonrası takımın oyun planı ve mental seviyesi hakkında ne düşünüyorsunuz?`,
+      choices: [
+        {
+          tone: 'Sakin / Profesyonel',
+          text: `Skordan bağımsız olarak sahadaki taktik sadakatten memnunum. Eksiklerimizi analiz edip bir sonraki tura daha güçlü çıkacağız.`,
+          goodProb: 0.75,
+          goodResult: {
+            text: `Soğukkanlı ve analitik açıklaman soyunma odasında güven yarattı.`,
+            morale: 2,
+            funds: 0,
+          },
+          badResult: {
+            text: `Basın açıklamayı fazla temkinli ve heyecansız buldu.`,
+            morale: -1,
+            funds: 0,
+          },
+        },
+        {
+          tone: 'İddialı / Agresif',
+          text: `${teamName} Avrupa'nın zirvesi için kuruldu! Kimse bizim oyun karakterimizi sorgulayamaz, sahada cevabımızı vermeye devam edeceğiz!`,
+          goodProb: 0.62,
+          goodResult: {
+            text: `Kararlı ve meydan okuyan tavrın taraftarları ve oyuncuları ateşledi; yayın ilgisi arttı.`,
+            morale: 3,
+            funds: 3,
+          },
+          badResult: {
+            text: `Agresif çıkışın manşetlerde 'baskı altında gerginlik' olarak yorumlandı.`,
+            morale: -2,
+            funds: 0,
+          },
+        },
+        {
+          tone: 'Takımı Koruyan',
+          text: `Tüm sorumluluk bana ait. Oyuncularım armaları için son damlasına kadar mücadele ediyor, onları kimseye yem etmem.`,
+          goodProb: 0.8,
+          goodResult: {
+            text: `Oyuncularına kalkan olman soyunma odasında büyük bir kenetlenme sağladı.`,
+            morale: 2,
+            funds: 0,
+          },
+          badResult: {
+            text: `Köşe yazarları taktik hataları üstlenmeni zafiyet olarak değerlendirdi.`,
+            morale: -1,
+            funds: 0,
+          },
+        },
+      ],
+    },
+    {
+      id: 'pc_star_player',
+      question: `Takımın yıldızı ${starName} üzerinde büyük bir medya spotu ve Avrupa devlerinin transfer iddiaları var. Performansını ve geleceğini nasıl değerlendiriyorsunuz?`,
+      choices: [
+        {
+          tone: 'Takımı Koruyan',
+          text: `${starName} bu kulübün kalbidir ve burada çok mutlu. Onu sadece saha içindeki liderliğiyle konuşmanızı tavsiye ederim.`,
+          goodProb: 0.76,
+          goodResult: {
+            text: `${starName} kendisine duyulan güvenden ötürü motive oldu ve takım morali yükseldi.`,
+            morale: 2,
+            funds: 2,
+          },
+          badResult: {
+            text: `Transfer dedikoduları tamamen dinmedi ve kulislere yansıdı.`,
+            morale: -1,
+            funds: 0,
+          },
+        },
+        {
+          tone: 'Küstah / Provokatif',
+          text: `${starName} şu an dünyanın en iyisi! Onu almak isteyen kulüpler önce kasalarındaki tüm parayı ve stadyumlarının tapusunu hazırlasın!`,
+          goodProb: 0.55,
+          goodResult: {
+            text: `Esprili ve özgüvenli çıkışın sosyal medyada gündem oldu; forma ve sponsor gelirleri patladı!`,
+            morale: 3,
+            funds: 6,
+          },
+          badResult: {
+            text: `Sözlerin kibirli bulundu ve takımın geri kalanında 'tek yıldız' rahatsızlığı yarattı.`,
+            morale: -3,
+            funds: -2,
+          },
+        },
+        {
+          tone: 'Sakin / Profesyonel',
+          text: `Biz bireyler üzerinden değil, sistem üzerinden konuşuruz. ${starName} da bu sistemin değerli bir parçası.`,
+          goodProb: 0.7,
+          goodResult: {
+            text: `Kolektif vurgun takım içi dengeleri ve disiplini güçlendirdi.`,
+            morale: 2,
+            funds: 0,
+          },
+          badResult: {
+            text: `${starName} basının önünde daha güçlü bir övgü bekliyordu.`,
+            morale: -1,
+            funds: 0,
+          },
+        },
+      ],
+    },
+    {
+      id: 'pc_ucl_ambition',
+      question: `Şampiyonlar Ligi'nde şu an ${rank}. sıradasınız. ${teamName} bu sezon Devler Ligi kupasını gerçekten müzesine götürebilir mi?`,
+      choices: [
+        {
+          tone: 'İddialı / Agresif',
+          text: `Buraya grup aşamasında fotoğraf çektirmeye gelmedik! Kupayı kaldırmak için her rakibi ezip geçmeye hazırız!`,
+          goodProb: 0.65,
+          goodResult: {
+            text: `Şampiyonluk vizyonun hem soyunma odasını hem de ticari partnerleri heyecanlandırdı!`,
+            morale: 3,
+            funds: 5,
+          },
+          badResult: {
+            text: `Büyük sözlerin oyuncular üzerinde ekstra şampiyonluk stresi oluşturdu.`,
+            morale: -2,
+            funds: 0,
+          },
+        },
+        {
+          tone: 'Diplomatik / Politik',
+          text: `Şampiyonlar Ligi dünyanın en zorlu arenası. Maç maç ilerleyip her turda en iyi versiyonumuzu sahaya yansıtacağız.`,
+          goodProb: 0.78,
+          goodResult: {
+            text: `Ayakları yere basan gerçekçi yaklaşımın takım üzerindeki baskıyı azalttı.`,
+            morale: 2,
+            funds: 2,
+          },
+          badResult: {
+            text: `Taraftarlar daha cesur bir şampiyonluk vaadi duymak istiyordu.`,
+            morale: -1,
+            funds: 0,
+          },
+        },
+        {
+          tone: 'Küstah / Provokatif',
+          text: `Diğer 35 takım ikincilik için yarışabilir; bu sezonun favorisi tartışmasız biziz!`,
+          goodProb: 0.5,
+          goodResult: {
+            text: `Cesur meydan okuman dünya basınında manşet oldu, küresel yayın primleri kulüp kasasına aktı!`,
+            morale: 4,
+            funds: 7,
+          },
+          badResult: {
+            text: `Rakip hocalar bu açıklamayı soyunma odası duvarına astı; kamuoyu tepkisi sert oldu.`,
+            morale: -3,
+            funds: -3,
+          },
+        },
+      ],
+    },
+    {
+      id: 'pc_referee_var',
+      question: `Son maçtaki hakem kararları ve VAR incelemeleri hakkında sosyal medyada büyük tartışma var. Hakem yönetimi hakkında yorumunuz nedir?`,
+      choices: [
+        {
+          tone: 'Sakin / Profesyonel',
+          text: `Hakemler de insan. Biz bahanelerin arkasına sığınan bir kulüp değiliz, kendi oyunumuza odaklanıyoruz.`,
+          goodProb: 0.78,
+          goodResult: {
+            text: `Centilmence duruşun UEFA gözlemcileri ve futbol kamuoyundan takdir topladı.`,
+            morale: 2,
+            funds: 2,
+          },
+          badResult: {
+            text: `Taraftar grupları kulübün hakkının masada yeterince savunulmadığını düşündü.`,
+            morale: -1,
+            funds: 0,
+          },
+        },
+        {
+          tone: 'İddialı / Agresif',
+          text: `Sahada emeğimizin çalınmasına sessiz kalamayız! VAR odasındaki standartların derhal yükselmesi gerekiyor!`,
+          goodProb: 0.58,
+          goodResult: {
+            text: `Sert çıkışın camiayı ve oyuncuları hırslandırdı, herkes tek yürek oldu!`,
+            morale: 3,
+            funds: 0,
+          },
+          badResult: {
+            text: `UEFA Disiplin Kurulu hakem eleştirisi nedeniyle kulübe para cezası kesti!`,
+            morale: -1,
+            funds: -4,
+          },
+        },
+        {
+          tone: 'Küstah / Provokatif',
+          text: `Bizi durdurmak için hakem hataları bile yetmez, sahada 11'e 12 oynamaya da alışığız!`,
+          goodProb: 0.48,
+          goodResult: {
+            text: `Takım bu meydan okumayla kenetlendi ve taraftar ürünleri satışında rekor kırıldı.`,
+            morale: 4,
+            funds: 4,
+          },
+          badResult: {
+            text: `UEFA'dan ağır disiplin para cezası geldi ve basın toplantısı krize dönüştü.`,
+            morale: -2,
+            funds: -6,
+          },
+        },
+      ],
+    },
+    {
+      id: 'pc_tactics_critique',
+      question: `Bazı futbol yorumcuları yoğun Şampiyonlar Ligi fikstüründe oyun kurulumunuzun fazla riskli olduğunu savunuyor. Taktik anlayışınızı değiştirecek misiniz?`,
+      choices: [
+        {
+          tone: 'Sakin / Profesyonel',
+          text: `Rakibe göre mikro dokunuşlar yapıyoruz ancak oyun felsefemizden ödün vermeyeceğiz. Verilerimiz doğru yolda olduğumuzu gösteriyor.`,
+          goodProb: 0.76,
+          goodResult: {
+            text: `Taktik netliğin oyuncuların sahadaki rol paylaşımına olan inancını pekiştirdi.`,
+            morale: 2,
+            funds: 1,
+          },
+          badResult: {
+            text: `Eleştirmenler oyun planını fazla inatçı bulmaya devam etti.`,
+            morale: -1,
+            funds: 0,
+          },
+        },
+        {
+          tone: 'Küstah / Provokatif',
+          text: `Televizyon koltuğunda oturup tahtada pul dizmek kolay! Sahaya inip bu tempoyu yönetmek bambaşka bir seviye.`,
+          goodProb: 0.54,
+          goodResult: {
+            text: `Yorumculara verdiğin sert ayar taraftarların hoşuna gitti ve takımı dış baskıdan korudu.`,
+            morale: 3,
+            funds: 3,
+          },
+          badResult: {
+            text: `Medya ile girdiğin polemik hafta boyunca manşetleri meşgul etti.`,
+            morale: -2,
+            funds: -2,
+          },
+        },
+        {
+          tone: 'Diplomatik / Politik',
+          text: `Her görüşe saygı duyuyoruz. Hem hücum coşkusunu hem de savunma güvenliğini dengeleyecek çözümler üzerinde çalışıyoruz.`,
+          goodProb: 0.74,
+          goodResult: {
+            text: `Yapıcı ve açık fikirli cevabın basınla ilişkileri yumuşattı.`,
+            morale: 1,
+            funds: 2,
+          },
+          badResult: {
+            text: `Açıklaman fazla yuvarlak bulundu.`,
+            morale: -1,
+            funds: 0,
+          },
+        },
+      ],
+    },
+    {
+      id: 'pc_ commercial_pressure',
+      question: `Şampiyonlar Ligi sponsorlarının ve küresel yayıncıların ${teamName} maçlarına ilgisi zirvede. Artan ticari beklentiler saha içini etkiliyor mu?`,
+      choices: [
+        {
+          tone: 'Diplomatik / Politik',
+          text: `Küresel markaların kulübümüzün yanında olması gücümüze güç katıyor. Hem sahada hem vitrinde en üst seviyeyi temsil ediyoruz.`,
+          goodProb: 0.78,
+          goodResult: {
+            text: `Sponsorlar açıklamadan çok memnun kaldı ve kulübe özel medya aktivasyon primi aktardı!`,
+            morale: 1,
+            funds: 5,
+          },
+          badResult: {
+            text: `Oyuncular yoğun medya çekimlerinden ötürü hafif yorgunluk hissetti.`,
+            morale: -1,
+            funds: 2,
+          },
+        },
+        {
+          tone: 'Sakin / Profesyonel',
+          text: `Ticari konular yönetimin işi; benim ve oyuncularımın tek odağı antrenman sahası ve 90 dakikalık mücadele.`,
+          goodProb: 0.75,
+          goodResult: {
+            text: `Saha içi disipline vurgun takımın konsantrasyonunu üst seviyeye çıkardı.`,
+            morale: 2,
+            funds: 0,
+          },
+          badResult: {
+            text: `Pazarlama departmanı sponsorlara daha sıcak mesaj verilmesini bekliyordu.`,
+            morale: 0,
+            funds: -2,
+          },
+        },
+        {
+          tone: 'İddialı / Agresif',
+          text: `Avrupa'nın en çok izlenen takımıyız çünkü en heyecan verici futbolu biz oynuyoruz! Sponsorlar doğru adreste!`,
+          goodProb: 0.65,
+          goodResult: {
+            text: `Özgüvenli açıklaman hem kulüp kasasına ekstra bonus kazandırdı hem de takımın göğsünü kabarttı!`,
+            morale: 2,
+            funds: 6,
+          },
+          badResult: {
+            text: `İddialı sözlerin beklenti çıtasını aşırı yükseltti.`,
+            morale: -2,
+            funds: 0,
+          },
+        },
+      ],
+    },
+  ];
+}
+
+export function triggerPressConferenceForTeam(
+  lg: LeagueState,
+  teams: Team[],
+  teamIdx: number,
+  completedWeek: number
+): void {
+  if (!lg.isUcl) return;
+  const userTeam = teams[teamIdx];
+  if (!userTeam || !userTeam.isHuman) return;
+
+  const tc = ensureTeamCareerState(lg, teamIdx);
+  const st = getSortedStandings(lg);
+  const rankIdx = st.findIndex((r) => r.teamIdx === teamIdx);
+  const rank = rankIdx >= 0 ? rankIdx + 1 : 1;
+
+  const lastRes = tc.lastResult || (teamIdx === 0 ? lg.lastResult : null);
+  const oppName = lastRes?.oppName || 'Rakip';
+  const userGoals = lastRes?.userGoals ?? 1;
+  const oppGoals = lastRes?.oppGoals ?? 1;
+  const lastScoreText = `${userTeam.name} ${userGoals}-${oppGoals} ${oppName}`;
+  const lostLastMatch = userGoals < oppGoals;
+
+  ensureTeamLineup(userTeam, lg, true);
+  const starPlayer =
+    [...(userTeam.starters || userTeam.picks)].sort((a, b) => b.r - a.r)[0] ||
+    userTeam.picks[0];
+  const starName = starPlayer ? starPlayer.n : 'Takım Kaptanı';
+
+  const catalog = buildPressConferenceCatalog(
+    userTeam.name,
+    oppName,
+    starName,
+    rank,
+    `${userGoals}-${oppGoals}`
+  );
+  const order = shuffleNums(catalog.map((_, idx) => idx)).slice(0, 3);
+  const mediaOrder = shuffleNums(PRESS_CONFERENCE_MEDIA.map((_, idx) => idx));
+
+  const questions: PressConferenceAskedQuestion[] = order.map((qIdx, i) => {
+    const qDef = catalog[qIdx];
+    const mediaName = PRESS_CONFERENCE_MEDIA[mediaOrder[i % mediaOrder.length]];
+    return {
+      media: mediaName,
+      questionId: qDef.id,
+      questionText: qDef.question,
+      choices: qDef.choices,
+    };
+  });
+
+  const pcState: PressConferenceState = {
+    week: completedWeek,
+    teamIdx,
+    teamName: userTeam.name,
+    rank,
+    lastMatchSummary: lastScoreText,
+    lostLastMatch,
+    status: 'invited',
+    currentQIdx: 0,
+    questions,
+    answers: [],
+    totalMoraleDelta: 0,
+    totalFundsDelta: 0,
+  };
+
+  tc.activePressConference = pcState;
+  if (teamIdx === 0) {
+    syncTopLevelCareerMirrorForTeam0(lg);
+  }
+}
+
+export function triggerWeeklyPressConferences(
+  lg: LeagueState,
+  teams: Team[],
+  completedWeek: number
+): void {
+  if (!lg.isUcl || completedWeek % 5 !== 0) return;
+  const humanIndices = teams
+    .map((tm, idx) => (tm.isHuman ? idx : -1))
+    .filter((idx) => idx >= 0);
+  humanIndices.forEach((tIdx) => {
+    triggerPressConferenceForTeam(lg, teams, tIdx, completedWeek);
+  });
+}
+
+export function acceptPressConference(lg: LeagueState, teamIdx: number): void {
+  const tc = ensureTeamCareerState(lg, teamIdx);
+  const pc = tc.activePressConference;
+  if (!pc) return;
+  pc.status = 'in_progress';
+  pc.currentQIdx = 0;
+  if (teamIdx === 0) syncTopLevelCareerMirrorForTeam0(lg);
+}
+
+export function declinePressConference(lg: LeagueState, teamIdx: number): string {
+  const tc = ensureTeamCareerState(lg, teamIdx);
+  const pc = tc.activePressConference;
+  if (!pc) return '';
+
+  let outcome = '';
+  if (pc.lostLastMatch) {
+    tc.moraleMod = Math.max(-15, Math.min(8, tc.moraleMod - 1));
+    outcome = "Mağlubiyet sonrası basın toplantısına çıkmaman 'kaçtı' manşetleriyle yorumlandı (Moral -1).";
+    lg.newsFeed.unshift({
+      week: pc.week,
+      source: 'Sky Sports · Basın Merkezi',
+      teamIdx,
+      title: `${pc.teamName} Teknik Direktörü Basın Toplantısına Çıkmadı!`,
+      body: `${pc.lastMatchSummary} maçının ardından düzenlenen UEFA basın toplantısına katılmayan teknik direktör için spor basını 'Mağlubiyet sonrası kameralardan kaçtı' manşetlerini attı.`,
+      effectBadge: 'Moral -1',
+      effectPositive: false,
+    });
+  } else {
+    outcome = 'Toplantıya kulüp sözcüsü gönderildi; basın bu hafta sana fazla yüklenmedi.';
+    lg.newsFeed.unshift({
+      week: pc.week,
+      source: 'UEFA Medya Merkezi',
+      teamIdx,
+      title: `${pc.teamName} Basın Toplantısına Kulüp Sözcüsü Katıldı`,
+      body: `${pc.week}. hafta maçının ardından düzenlenen basın toplantısında soruları kulüp sözcüsü yanıtladı.`,
+      effectBadge: 'Etki Yok',
+      effectPositive: null,
+    });
+  }
+
+  tc.eventHistory.unshift({
+    week: pc.week,
+    title: `${pc.week}. Hafta Basın Toplantısı (Katılmadı)`,
+    outcome,
+  });
+  pc.status = 'declined';
+  pc.declineOutcomeText = outcome;
+  pc.declineMoraleDelta = pc.lostLastMatch ? -1 : 0;
+  if (teamIdx === 0) syncTopLevelCareerMirrorForTeam0(lg);
+  return outcome;
+}
+
+export function answerPressConferenceQuestion(
+  lg: LeagueState,
+  teamIdx: number,
+  choiceIdx: number,
+  rng: () => number = Math.random
+): void {
+  const tc = ensureTeamCareerState(lg, teamIdx);
+  const pc = tc.activePressConference;
+  if (!pc || pc.status !== 'in_progress') return;
+
+  const q = pc.questions[pc.currentQIdx];
+  if (!q) return;
+  const ch = q.choices[choiceIdx] || q.choices[0];
+  const isGood = rng() < ch.goodProb;
+  const res = isGood ? ch.goodResult : ch.badResult;
+
+  pc.answers.push({
+    media: q.media,
+    questionText: q.questionText,
+    chosenTone: ch.tone,
+    chosenText: ch.text,
+    isGood,
+    outcomeText: res.text,
+    moraleDelta: res.morale,
+    fundsDelta: res.funds,
+  });
+
+  pc.totalMoraleDelta += res.morale;
+  pc.totalFundsDelta += res.funds;
+
+  if (pc.currentQIdx + 1 >= pc.questions.length) {
+    pc.status = 'completed';
+    tc.moraleMod = Math.max(-15, Math.min(8, tc.moraleMod + pc.totalMoraleDelta));
+    tc.clubFunds = Math.max(0, tc.clubFunds + pc.totalFundsDelta);
+
+    const mSign = pc.totalMoraleDelta > 0 ? `+${pc.totalMoraleDelta}` : `${pc.totalMoraleDelta}`;
+    const fSign = pc.totalFundsDelta > 0 ? `+${pc.totalFundsDelta}` : `${pc.totalFundsDelta}`;
+    const headline =
+      pc.totalMoraleDelta >= 2
+        ? `${pc.teamName} Hocası Basın Toplantısında Rüzgar Estirdi!`
+        : pc.totalMoraleDelta < 0
+        ? `${pc.teamName} Basın Toplantısında Gergin Anlar!`
+        : `${pc.teamName} Cephesinden Dengeli Açıklamalar`;
+    pc.headline = headline;
+
+    const summaryOutcome = `Basın toplantısı tamamlandı · Moral: ${mSign}, Kasa: ${fSign} M€`;
+    tc.eventHistory.unshift({
+      week: pc.week,
+      title: `${pc.week}. Hafta UEFA Basın Toplantısı`,
+      outcome: summaryOutcome,
+    });
+
+    lg.newsFeed.unshift({
+      week: pc.week,
+      source: `${pc.answers[0]?.media || 'Sky Sports'} · UEFA Basın Salonu`,
+      teamIdx,
+      title: headline,
+      body: `${pc.week}. hafta sonrasında kameralar karşısına geçen ${pc.teamName} teknik direktörü, muhabirlerin 3 kritik sorusunu yanıtladı. (${summaryOutcome})`,
+      effectBadge: `Moral ${mSign} · Kasa ${fSign} M€`,
+      effectPositive: pc.totalMoraleDelta >= 0 && pc.totalFundsDelta >= 0,
+    });
+  } else {
+    pc.currentQIdx += 1;
+  }
+
+  if (teamIdx === 0) syncTopLevelCareerMirrorForTeam0(lg);
+}
+
+export function closeCompletedPressConference(lg: LeagueState, teamIdx: number): void {
+  const tc = ensureTeamCareerState(lg, teamIdx);
+  tc.activePressConference = null;
+  if (teamIdx === 0) syncTopLevelCareerMirrorForTeam0(lg);
+}
+
 export function finalizeCareerWeekAfterUserMatch(
   lg: LeagueState,
   teams: Team[],
@@ -2124,16 +2748,42 @@ export function finalizeCareerWeekAfterUserMatch(
     userMatch.sc = [sA, sB];
     userMatch.redCards = [];
     if (isKnockoutWeek) {
-      if (penSc) {
-        const pA = isDirectOrder ? penSc[0] : penSc[1];
-        const pB = isDirectOrder ? penSc[1] : penSc[0];
-        userMatch.pen = [pA, pB];
-        userMatch.winner = pA >= pB ? userMatch.a : userMatch.b;
-      } else if (sA === sB) {
-        userMatch.pen = [5, 4];
-        userMatch.winner = userMatch.a;
+      if (isUclFirstLegWeek(completedWeek)) {
+        userMatch.pen = null;
+        userMatch.aggSc = null;
+        userMatch.winner = sA > sB ? userMatch.a : sB > sA ? userMatch.b : null;
+      } else if (isUclSecondLegWeek(completedWeek)) {
+        const fSc = userMatch.firstLegSc || [0, 0];
+        const aggA = sA + fSc[0];
+        const aggB = sB + fSc[1];
+        userMatch.aggSc = [aggA, aggB];
+        if (penSc) {
+          const pA = isDirectOrder ? penSc[0] : penSc[1];
+          const pB = isDirectOrder ? penSc[1] : penSc[0];
+          userMatch.pen = [pA, pB];
+          userMatch.winner = pA >= pB ? userMatch.a : userMatch.b;
+        } else if (aggA === aggB) {
+          userMatch.pen = [5, 4];
+          userMatch.winner = userMatch.a;
+        } else {
+          userMatch.pen = null;
+          userMatch.winner = aggA > aggB ? userMatch.a : userMatch.b;
+        }
       } else {
-        userMatch.winner = sA > sB ? userMatch.a : userMatch.b;
+        // Week 17: Single-Match Final
+        userMatch.aggSc = null;
+        if (penSc) {
+          const pA = isDirectOrder ? penSc[0] : penSc[1];
+          const pB = isDirectOrder ? penSc[1] : penSc[0];
+          userMatch.pen = [pA, pB];
+          userMatch.winner = pA >= pB ? userMatch.a : userMatch.b;
+        } else if (sA === sB) {
+          userMatch.pen = [5, 4];
+          userMatch.winner = userMatch.a;
+        } else {
+          userMatch.pen = null;
+          userMatch.winner = sA > sB ? userMatch.a : userMatch.b;
+        }
       }
     } else {
       updateLeagueTableForMatch(lg, userMatch.a, userMatch.b, sA, sB);
@@ -2260,14 +2910,18 @@ export function finalizeCareerWeekAfterUserMatch(
     enforceHealthyStartersForTeam(tm, lg, true);
   });
 
-  // 4) Trigger weekly career event & weekly news
-  triggerWeeklyCareerEvent(lg, teams);
+  // 4) Trigger press conference (every 5 matches in UCL) or weekly career event, & weekly news
+  if (lg.isUcl && completedWeek % 5 === 0) {
+    triggerWeeklyPressConferences(lg, teams, completedWeek);
+  } else {
+    triggerWeeklyCareerEvent(lg, teams);
+  }
   triggerWeeklyTeamNews(lg, teams, roundMatches, completedWeek);
 }
 
 /**
  * Simulates a single career week when no human team has a match in that week
- * (e.g., human team finished Top 8 in UCL and has a bye during Week 9 Play-Off, or was eliminated).
+ * (e.g., human team finished Top 8 in UCL and has a bye during Week 9-10 Play-Off, or was eliminated).
  */
 export function simulateSingleCareerWeek(lg: LeagueState, teams: Team[]): void {
   if (!lg || lg.week > lg.maxWeeks) return;
@@ -2295,6 +2949,7 @@ export function simulateSingleCareerWeek(lg: LeagueState, teams: Team[]): void {
   if (matchNews) lg.newsFeed.unshift(matchNews);
   lg.viewWeek = cw;
   lg.week++;
+  triggerWeeklyPressConferences(lg, teams, cw);
 }
 
 export function simulateRestOfLeagueSeason(lg: LeagueState, teams: Team[]): void {
@@ -2325,6 +2980,7 @@ export function simulateRestOfLeagueSeason(lg: LeagueState, teams: Team[]): void
     lg.week++;
   }
   lg.activeEvent = null;
+  lg.activePressConference = null;
   lg.activeNews = null;
   lg.pendingNewsAfterEvent = null;
 }

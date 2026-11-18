@@ -82,6 +82,9 @@ export interface DraftState {
   history: DraftHistoryItem[];
   budgetWarning: string;
   nameGroups?: Record<string, Player[]>;
+  _cacheTakenSize?: number;
+  _cheapestByPos?: Record<Position, { id: number; cost: number }[]>;
+  _cheapestAll?: { id: number; cost: number }[];
 }
 
 export interface WheelState {
@@ -152,6 +155,7 @@ export interface MatchPlan {
   penaltyData: PenaltyData | null;
   maxMin: number;
   scheduledByMin: ScheduledMatchEvent[][];
+  aggOffset?: [number, number];
 }
 
 export interface MatchGoalEntry {
@@ -225,6 +229,9 @@ export interface LeagueFixture {
   pen?: [number, number] | null;
   winner?: number | null;
   stageLabel?: string;
+  leg?: 1 | 2;
+  firstLegSc?: [number, number] | null;
+  aggSc?: [number, number] | null;
   redCards?: { teamIdx: number; playerId: number; playerName: string }[];
 }
 
@@ -283,6 +290,61 @@ export interface CareerEventHistoryItem {
   outcome: string;
 }
 
+export interface PressConferenceChoiceDef {
+  tone:
+    | 'Sakin / Profesyonel'
+    | 'İddialı / Agresif'
+    | 'Küstah / Provokatif'
+    | 'Diplomatik / Politik'
+    | 'Takımı Koruyan';
+  text: string;
+  goodProb: number;
+  goodResult: { text: string; morale: number; funds: number };
+  badResult: { text: string; morale: number; funds: number };
+}
+
+export interface PressConferenceQuestionDef {
+  id: string;
+  question: string;
+  choices: PressConferenceChoiceDef[];
+}
+
+export interface PressConferenceAskedQuestion {
+  media: string;
+  questionId: string;
+  questionText: string;
+  choices: PressConferenceChoiceDef[];
+}
+
+export interface PressConferenceAnswerLog {
+  media: string;
+  questionText: string;
+  chosenTone: string;
+  chosenText: string;
+  isGood: boolean;
+  outcomeText: string;
+  moraleDelta: number;
+  fundsDelta: number;
+}
+
+export interface PressConferenceState {
+  week: number;
+  teamIdx: number;
+  teamName: string;
+  rank: number;
+  lastMatchSummary: string;
+  lostLastMatch: boolean;
+  status: 'invited' | 'in_progress' | 'completed' | 'declined';
+  currentQIdx: number;
+  questions: PressConferenceAskedQuestion[];
+  answers: PressConferenceAnswerLog[];
+  totalMoraleDelta: number;
+  totalFundsDelta: number;
+  headline?: string;
+  declineOutcomeText?: string;
+  declineMoraleDelta?: number;
+}
+
 export interface TeamCareerState {
   clubFunds: number;
   sponsorName: string;
@@ -290,6 +352,7 @@ export interface TeamCareerState {
   lastResult: { userGoals: number; oppGoals: number; oppName: string } | null;
   usedEventIds: string[];
   activeEvent: CareerEvent | null;
+  activePressConference?: PressConferenceState | null;
   eventHistory: CareerEventHistoryItem[];
 }
 
@@ -324,6 +387,7 @@ export interface LeagueState {
   usedEventIds: Set<string>;
   usedNewsIds: Set<string>;
   activeEvent: CareerEvent | null;
+  activePressConference?: PressConferenceState | null;
   activeNews: CareerNewsItem | null;
   pendingNewsAfterEvent?: CareerNewsItem | null;
   eventHistory: CareerEventHistoryItem[];

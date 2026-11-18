@@ -1,10 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  acceptPressConference,
   advanceCareerStatusOneWeek,
+  answerPressConferenceQuestion,
   buildCareerEventsCatalog,
   buildClubTeamObject,
   calcClubStrength,
+  closeCompletedPressConference,
+  declinePressConference,
   finalizeCareerWeekAfterUserMatch,
   generateDoubleRoundRobinSchedule,
   getSortedStandings,
@@ -15,6 +19,7 @@ import {
   selectPremierLeagueAiClubs,
   simulateSingleCareerWeek,
   suspendPlayerForRedCard,
+  triggerPressConferenceForTeam,
   triggerWeeklyCareerEvent,
   WORLD_FOOTBALL_NEWS_TEMPLATES,
 } from './careerLogic';
@@ -508,7 +513,7 @@ test('2-player Career mode maintains independent teamCareer events, funds, moral
   assert.equal(roundtrippedLeague.teamCareer[1].eventHistory.length, 1);
 });
 
-test('UEFA Champions League (Şampiyonlar Ligi) Career mode builds 36 teams across 4 pots, 8 pot-balanced league matches, and Play-Off (9v23, 10v24, 11v21, 12v22...) to Final knockout progression', () => {
+test('UEFA Champions League (Şampiyonlar Ligi) Career mode builds 36 teams, 8 league matches, two-legged knockouts (Weeks 9-16) + single-leg Final (Week 17), and triggers Press Conferences every 5 matches', () => {
   const newUclClubs = [
     'Slovan Bratislava',
     'Real Betis',
@@ -528,6 +533,7 @@ test('UEFA Champions League (Şampiyonlar Ligi) Career mode builds 36 teams acro
   }
   assert.ok(LEAGUE_LOGOS['Şampiyonlar Ligi']?.startsWith('data:image/'));
   assert.ok(UCL_BRAND_LOGOS.starballWhite.startsWith('data:image/'));
+  assert.ok(UCL_BRAND_LOGOS.heinekenWhite.startsWith('data:image/'));
   assert.equal(UCL_BRAND_LOGOS.sponsors.length, 4);
 
   const { state } = buildDraftState({
@@ -552,7 +558,8 @@ test('UEFA Champions League (Şampiyonlar Ligi) Career mode builds 36 teams acro
   assert.equal(league.isUcl, true);
   assert.equal(league.leagueName, 'Şampiyonlar Ligi');
   assert.equal(teams.length, 36);
-  assert.equal(league.maxWeeks, 13);
+  assert.equal(league.maxWeeks, 17);
+  assert.equal(league.schedule.length, 17);
   const uclPots = league.uclPots || [];
   assert.equal(uclPots.length, 36);
 
@@ -592,46 +599,91 @@ test('UEFA Champions League (Şampiyonlar Ligi) Career mode builds 36 teams acro
     );
   }
 
-  // Simulate weeks 1..8
-  for (let w = 1; w <= 8; w++) {
+  // Simulate weeks 1..5 and verify Press Conference triggers after Week 5
+  for (let w = 1; w <= 5; w++) {
+    simulateSingleCareerWeek(league, teams);
+  }
+  assert.equal(league.week, 6);
+  const pcWeek5 = league.teamCareer?.[0]?.activePressConference;
+  assert.ok(pcWeek5, 'Press conference should trigger after Week 5 in UCL');
+  assert.equal(pcWeek5.week, 5);
+  assert.equal(pcWeek5.status, 'invited');
+  assert.equal(pcWeek5.questions.length, 3);
+
+  // Accept press conference and answer 3 questions
+  acceptPressConference(league, 0);
+  assert.equal(league.teamCareer![0].activePressConference!.status, 'in_progress');
+  answerPressConferenceQuestion(league, 0, 0);
+  answerPressConferenceQuestion(league, 0, 1);
+  answerPressConferenceQuestion(league, 0, 0);
+  assert.equal(league.teamCareer![0].activePressConference!.status, 'completed');
+  assert.equal(league.teamCareer![0].activePressConference!.answers.length, 3);
+  closeCompletedPressConference(league, 0);
+  assert.equal(league.teamCareer![0].activePressConference, null);
+
+  // Test declining after a loss gives -1 morale
+  league.teamCareer![0].lastResult = { userGoals: 0, oppGoals: 2, oppName: 'Real Madrid' };
+  const moraleBeforeDecline = league.teamCareer![0].moraleMod;
+  triggerPressConferenceForTeam(league, teams, 0, 5);
+  declinePressConference(league, 0);
+  assert.equal(league.teamCareer![0].activePressConference!.status, 'declined');
+  assert.equal(league.teamCareer![0].moraleMod, moraleBeforeDecline - 1);
+  closeCompletedPressConference(league, 0);
+
+  // Simulate weeks 6..8
+  for (let w = 6; w <= 8; w++) {
     simulateSingleCareerWeek(league, teams);
   }
   assert.equal(league.week, 9);
 
-  // Check Week 9 Play-Off pairings: 9v23, 10v24, 11v21, 12v22, 13v19, 14v20, 15v17, 16v18
+  // Check Week 9 (Play-Off 1. Maç) & Week 10 (Play-Off Rövanş)
   const sortedStandings = getSortedStandings(league);
   const rankTeam = (r: number) => sortedStandings[r - 1].teamIdx;
-  const playOffRound = league.schedule[8];
-  assert.equal(playOffRound.length, 8, 'Play-Off round (Week 9) must have 8 matches');
-  assert.equal(playOffRound[0].a, rankTeam(9));
-  assert.equal(playOffRound[0].b, rankTeam(23));
-  assert.equal(playOffRound[1].a, rankTeam(10));
-  assert.equal(playOffRound[1].b, rankTeam(24));
-  assert.equal(playOffRound[2].a, rankTeam(11));
-  assert.equal(playOffRound[2].b, rankTeam(21));
-  assert.equal(playOffRound[3].a, rankTeam(12));
-  assert.equal(playOffRound[3].b, rankTeam(22));
+  const playOffLeg1 = league.schedule[8];
+  assert.equal(playOffLeg1.length, 8, 'Play-Off 1st leg (Week 9) must have 8 matches');
+  assert.equal(playOffLeg1[0].a, rankTeam(9));
+  assert.equal(playOffLeg1[0].b, rankTeam(23));
 
-  // Simulate Play-Off (Week 9), Son 16 (Week 10), QF (Week 11), SF (Week 12), Final (Week 13)
+  // Simulate Play-Off Leg 1 (Week 9) -> populates Leg 2 (Week 10)
   simulateSingleCareerWeek(league, teams);
   assert.equal(league.week, 10);
-  assert.equal(league.schedule[9].length, 8, 'Round of 16 (Week 10) must have 8 matches');
+  const playOffLeg2 = league.schedule[9];
+  assert.equal(playOffLeg2.length, 8, 'Play-Off 2nd leg (Week 10) must have 8 matches');
+  assert.equal(playOffLeg2[0].a, rankTeam(23));
+  assert.equal(playOffLeg2[0].b, rankTeam(9));
+  assert.ok(playOffLeg2[0].firstLegSc, '2nd leg fixture must have firstLegSc populated after Leg 1');
 
+  // Simulate Play-Off Leg 2 (Week 10) -> populates R16 Leg 1 (Week 11)
   simulateSingleCareerWeek(league, teams);
   assert.equal(league.week, 11);
-  assert.equal(league.schedule[10].length, 4, 'Quarter-Finals (Week 11) must have 4 matches');
+  assert.equal(league.schedule[10].length, 8, 'Round of 16 1st leg (Week 11) must have 8 matches');
 
+  // Simulate R16 Leg 1 (Week 11) & Leg 2 (Week 12)
   simulateSingleCareerWeek(league, teams);
-  assert.equal(league.week, 12);
-  assert.equal(league.schedule[11].length, 2, 'Semi-Finals (Week 12) must have 2 matches');
-
+  assert.equal(league.schedule[11].length, 8, 'Round of 16 2nd leg (Week 12) must have 8 matches');
   simulateSingleCareerWeek(league, teams);
   assert.equal(league.week, 13);
-  assert.equal(league.schedule[12].length, 1, 'Final (Week 13) must have 1 match');
+  assert.equal(league.schedule[12].length, 4, 'Quarter-Finals 1st leg (Week 13) must have 4 matches');
 
+  // Simulate QF Leg 1 (Week 13) & Leg 2 (Week 14)
   simulateSingleCareerWeek(league, teams);
-  assert.equal(league.week, 14);
+  assert.equal(league.schedule[13].length, 4, 'Quarter-Finals 2nd leg (Week 14) must have 4 matches');
+  simulateSingleCareerWeek(league, teams);
+  assert.equal(league.week, 15);
+  assert.equal(league.schedule[14].length, 2, 'Semi-Finals 1st leg (Week 15) must have 2 matches');
+
+  // Simulate SF Leg 1 (Week 15) & Leg 2 (Week 16)
+  simulateSingleCareerWeek(league, teams);
+  assert.equal(league.schedule[15].length, 2, 'Semi-Finals 2nd leg (Week 16) must have 2 matches');
+  simulateSingleCareerWeek(league, teams);
+  assert.equal(league.week, 17);
+  assert.equal(league.schedule[16].length, 1, 'Final (Week 17) must be a single match');
+
+  // Simulate Final (Week 17)
+  simulateSingleCareerWeek(league, teams);
+  assert.equal(league.week, 18);
   assert.equal(typeof league.uclChampionTeamIdx, 'number');
 });
+
 
 

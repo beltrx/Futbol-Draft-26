@@ -222,7 +222,8 @@ export function generateMatchPlan(
   _teamB: Team,
   sA: SideEvaluation,
   sB: SideEvaluation,
-  allowExtraTime = true
+  allowExtraTime = true,
+  aggOffset: [number, number] = [0, 0]
 ): MatchPlan {
   const scheduledByMin: ScheduledMatchEvent[][] = Array.from({ length: 121 }, () => []);
   const sentOff: [Set<number>, Set<number>] = [new Set(), new Set()];
@@ -248,7 +249,9 @@ export function generateMatchPlan(
   });
 
   const { goals: regGoals, netAdvantage } = rollMatchScoreline(sA, sB, redCardMinutes);
-  const goesToET = regGoals[0] === regGoals[1] && allowExtraTime;
+  const totRegA = regGoals[0] + (aggOffset[0] || 0);
+  const totRegB = regGoals[1] + (aggOffset[1] || 0);
+  const goesToET = totRegA === totRegB && allowExtraTime;
 
   const usedMinutes = new Set<number | null>([45, 90, 105, 120, redCardMinutes[0], redCardMinutes[1]]);
   function pickMinute(minStart: number, minEnd: number): number {
@@ -286,7 +289,7 @@ export function generateMatchPlan(
   let goesToPenalties = false;
   let penaltyData: PenaltyData | null = null;
   let finalWinnerSide: -1 | 0 | 1 =
-    regGoals[0] > regGoals[1] ? 0 : regGoals[1] > regGoals[0] ? 1 : -1;
+    totRegA > totRegB ? 0 : totRegB > totRegA ? 1 : -1;
 
   if (goesToET) {
     if (Math.random() < 0.48) {
@@ -361,6 +364,7 @@ export function generateMatchPlan(
     penaltyData,
     maxMin,
     scheduledByMin,
+    aggOffset: [aggOffset[0] || 0, aggOffset[1] || 0],
   };
 }
 
@@ -370,6 +374,7 @@ export interface SerializedMatchPlan {
   goesToPenalties: boolean;
   penaltyData: PenaltyData | null;
   maxMin: number;
+  aggOffset?: [number, number];
   scheduledByMin: {
     type: ScheduledMatchEvent['type'];
     side: 0 | 1;
@@ -388,6 +393,7 @@ export function serializeMatchPlan(plan: MatchPlan): SerializedMatchPlan {
     goesToPenalties: plan.goesToPenalties,
     penaltyData: plan.penaltyData,
     maxMin: plan.maxMin,
+    aggOffset: plan.aggOffset,
     scheduledByMin: plan.scheduledByMin.map((arr) =>
       arr.map((ev) => ({
         type: ev.type,
@@ -409,6 +415,7 @@ export function hydrateNetworkPlan(raw: SerializedMatchPlan): MatchPlan {
     goesToPenalties: raw.goesToPenalties,
     penaltyData: raw.penaltyData,
     maxMin: raw.maxMin,
+    aggOffset: raw.aggOffset,
     scheduledByMin: raw.scheduledByMin.map((arr) =>
       arr.map((ev) => ({
         type: ev.type,
@@ -578,11 +585,16 @@ export function stepMatchMinute(m: MatchState, minNum: number, teams: Team[]): v
       text: `İlk Yarı Sona Erdi · Skor: ${m.sc[0]} - ${m.sc[1]}`,
     });
   } else if (minNum === 90 && m.plan.goesToET) {
+    const off = m.plan.aggOffset || [0, 0];
+    const hasAgg = off[0] > 0 || off[1] > 0;
+    const aggText = hasAgg
+      ? `Toplam Skor Eşitlendi (${m.sc[0] + off[0]} - ${m.sc[1] + off[1]})`
+      : `Normal Süre Berabere Tamamlandı (${m.sc[0]} - ${m.sc[1]})`;
     m.log.push({
       min: 90,
       isGoal: true,
       isRed: false,
-      text: `Normal Süre Berabere Tamamlandı (${m.sc[0]} - ${m.sc[1]}) · Uzatma devrelerine geçiliyor.`,
+      text: `${aggText} · Uzatma devrelerine geçiliyor.`,
     });
   } else if (minNum === 105 && m.plan.goesToET) {
     m.log.push({
@@ -669,22 +681,27 @@ export function finalizeMatchState(
   const B = teams[m.b];
 
   if (isCareerMatch) {
-    if (m.sc[0] === m.sc[1] && m.plan.goesToPenalties && m.plan.penaltyData) {
+    const off = m.plan.aggOffset || [0, 0];
+    const hasAgg = off[0] > 0 || off[1] > 0;
+    const totA = m.sc[0] + off[0];
+    const totB = m.sc[1] + off[1];
+    if (totA === totB && m.plan.goesToPenalties && m.plan.penaltyData) {
       const pd = m.plan.penaltyData;
       m.penSc = [...pd.score] as [number, number];
       m.log.push({
         min: 120,
         isGoal: true,
         isRed: false,
-        text: `120 Dakika Berabere Bitti (${m.sc[0]} - ${m.sc[1]}) · Seri Penaltı Atışları Sonucu: ${A.name} ${m.penSc[0]} - ${m.penSc[1]} ${B.name}`,
+        text: `120 Dakika Sonunda Eşitlik Bozulmadı (${hasAgg ? `Toplam ${totA} - ${totB}` : `${m.sc[0]} - ${m.sc[1]}`}) · Seri Penaltı Atışları Sonucu: ${A.name} ${m.penSc[0]} - ${m.penSc[1]} ${B.name}`,
       });
     }
+    const aggNote = hasAgg ? ` (Toplam: ${totA}-${totB})` : '';
     const penNote = m.penSc ? ` (Pen: ${m.penSc[0]}-${m.penSc[1]})` : '';
     m.log.push({
       min: m.plan.maxMin || 90,
       isGoal: true,
       isRed: false,
-      text: `Maç Tamamlandı: ${A.name} ${m.sc[0]} - ${m.sc[1]} ${B.name}${penNote} · Haftanın diğer maçları da simüle edildi.`,
+      text: `Maç Tamamlandı: ${A.name} ${m.sc[0]} - ${m.sc[1]} ${B.name}${aggNote}${penNote} · Haftanın diğer maçları da simüle edildi.`,
     });
     return;
   }

@@ -35,9 +35,15 @@ import type {
 } from './types/game';
 import { UCL_BRAND_LOGOS } from './data/logos';
 import {
+  acceptPressConference,
+  answerPressConferenceQuestion,
+  closeCompletedPressConference,
+  declinePressConference,
   ensureTeamCareerState,
   finalizeCareerWeekAfterUserMatch,
   initCareerLeague,
+  isUclFirstLegWeek,
+  isUclSecondLegWeek,
   resolveTeamCareerEventChoice,
   simulateRestOfLeagueSeason,
   simulateSingleCareerWeek,
@@ -81,6 +87,16 @@ function cloneLeague(lg: LeagueState): LeagueState {
         activeEvent: v.activeEvent
           ? { ...v.activeEvent, choices: v.activeEvent.choices.map((c) => ({ ...c })) }
           : null,
+        activePressConference: v.activePressConference
+          ? {
+              ...v.activePressConference,
+              questions: v.activePressConference.questions.map((q) => ({
+                ...q,
+                choices: q.choices.map((c) => ({ ...c })),
+              })),
+              answers: v.activePressConference.answers.map((a) => ({ ...a })),
+            }
+          : null,
         eventHistory: [...(v.eventHistory || [])],
       };
     }
@@ -92,6 +108,8 @@ function cloneLeague(lg: LeagueState): LeagueState {
         ...f,
         redCards: f.redCards ? [...f.redCards] : undefined,
         pen: f.pen ? ([...f.pen] as [number, number]) : undefined,
+        firstLegSc: f.firstLegSc ? ([...f.firstLegSc] as [number, number]) : f.firstLegSc,
+        aggSc: f.aggSc ? ([...f.aggSc] as [number, number]) : f.aggSc,
       }))
     ),
     standings: lg.standings.map((r) => ({ ...r })),
@@ -103,6 +121,16 @@ function cloneLeague(lg: LeagueState): LeagueState {
     eventHistory: [...lg.eventHistory],
     newsFeed: [...lg.newsFeed],
     teamCareer: clonedTeamCareer,
+    activePressConference: lg.activePressConference
+      ? {
+          ...lg.activePressConference,
+          questions: lg.activePressConference.questions.map((q) => ({
+            ...q,
+            choices: q.choices.map((c) => ({ ...c })),
+          })),
+          answers: lg.activePressConference.answers.map((a) => ({ ...a })),
+        }
+      : null,
     uclPots: lg.uclPots ? lg.uclPots.map((p) => ({ ...p })) : undefined,
   };
 }
@@ -309,12 +337,41 @@ export default function App() {
       const { draft: curDraft, league: curLeague, net: curNet } = stateRef.current;
       if (!curDraft) return;
       const isCareer = !!curDraft.m.career;
-      const allowExtraTime = !isCareer || Boolean(curLeague?.isUcl && curLeague.week > 8);
+      let allowExtraTime = !isCareer;
+      let aggOffset: [number, number] = [0, 0];
+
+      if (isCareer && curLeague?.isUcl) {
+        if (isUclFirstLegWeek(curLeague.week) || curLeague.week <= 8) {
+          allowExtraTime = false;
+        } else if (isUclSecondLegWeek(curLeague.week)) {
+          allowExtraTime = true;
+          const roundFixtures = curLeague.schedule[curLeague.week - 1] || [];
+          const fix = roundFixtures.find(
+            (f) => (f.a === a && f.b === b) || (f.a === b && f.b === a)
+          );
+          if (fix?.firstLegSc) {
+            aggOffset =
+              fix.a === a
+                ? [fix.firstLegSc[0], fix.firstLegSc[1]]
+                : [fix.firstLegSc[1], fix.firstLegSc[0]];
+          }
+        } else if (curLeague.week === 17) {
+          allowExtraTime = true;
+        }
+      }
+
       const cloned = cloneDraftState(curDraft);
       cloned.teams.forEach((tm) => ensureTeamLineup(tm, curLeague, isCareer));
       const sA = side(cloned.teams[a], curLeague, isCareer);
       const sB = side(cloned.teams[b], curLeague, isCareer);
-      const plan = generateMatchPlan(cloned.teams[a], cloned.teams[b], sA, sB, allowExtraTime);
+      const plan = generateMatchPlan(
+        cloned.teams[a],
+        cloned.teams[b],
+        sA,
+        sB,
+        allowExtraTime,
+        aggOffset
+      );
       const mState = createInitialMatchState(
         a,
         b,
@@ -1897,6 +1954,34 @@ export default function App() {
             }}
             onDismissNews={() => {
               setLeague((prev) => (prev ? { ...prev, activeNews: null } : prev));
+            }}
+            onAcceptPressConference={(teamIdx) => {
+              const curLeague = stateRef.current.league;
+              if (!curLeague) return;
+              const next = cloneLeague(curLeague);
+              acceptPressConference(next, teamIdx);
+              setLeague(next);
+            }}
+            onDeclinePressConference={(teamIdx) => {
+              const curLeague = stateRef.current.league;
+              if (!curLeague) return;
+              const next = cloneLeague(curLeague);
+              declinePressConference(next, teamIdx);
+              setLeague(next);
+            }}
+            onAnswerPressConference={(teamIdx, choiceIdx) => {
+              const curLeague = stateRef.current.league;
+              if (!curLeague) return;
+              const next = cloneLeague(curLeague);
+              answerPressConferenceQuestion(next, teamIdx, choiceIdx);
+              setLeague(next);
+            }}
+            onClosePressConference={(teamIdx) => {
+              const curLeague = stateRef.current.league;
+              if (!curLeague) return;
+              const next = cloneLeague(curLeague);
+              closeCompletedPressConference(next, teamIdx);
+              setLeague(next);
             }}
           />
         )}

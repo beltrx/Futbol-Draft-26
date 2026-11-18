@@ -36,6 +36,10 @@ interface CareerHubViewProps {
   onResolveEventChoice: (choice: CareerEventChoice, choiceIdx: number) => string;
   onDismissEvent: () => void;
   onDismissNews: () => void;
+  onAcceptPressConference: (teamIdx: number) => void;
+  onDeclinePressConference: (teamIdx: number) => void;
+  onAnswerPressConference: (teamIdx: number, choiceIdx: number) => void;
+  onClosePressConference: (teamIdx: number) => void;
 }
 
 export const CareerHubView: React.FC<CareerHubViewProps> = ({
@@ -52,8 +56,13 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
   onResolveEventChoice,
   onDismissEvent,
   onDismissNews,
+  onAcceptPressConference,
+  onDeclinePressConference,
+  onAnswerPressConference,
+  onClosePressConference,
 }) => {
   const [eventOutcomeText, setEventOutcomeText] = useState<string | null>(null);
+  const [cameraFlash, setCameraFlash] = useState<boolean>(false);
 
   const standings = useMemo(() => getSortedStandings(league), [league]);
   const seasonOver = league.week > league.maxWeeks;
@@ -88,6 +97,35 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
     ? league.activeEvent
     : null;
   const myEventHistory = myCareer ? myCareer.eventHistory : league.eventHistory;
+
+  // Determine active Press Conference for human player(s)
+  const activePressTeamIdx = useMemo(() => {
+    if (net.connected) {
+      return league.teamCareer?.[myTeamIdx]?.activePressConference ? myTeamIdx : null;
+    }
+    for (let i = 0; i < teams.length; i++) {
+      if (teams[i]?.isHuman && league.teamCareer?.[i]?.activePressConference) {
+        return i;
+      }
+    }
+    if (league.activePressConference) {
+      return league.activePressConference.teamIdx;
+    }
+    return null;
+  }, [league.teamCareer, league.activePressConference, teams, net.connected, myTeamIdx]);
+
+  const activePressConference =
+    activePressTeamIdx != null
+      ? league.teamCareer?.[activePressTeamIdx]?.activePressConference ||
+        league.activePressConference ||
+        null
+      : null;
+  const activePressTeam = activePressTeamIdx != null ? teams[activePressTeamIdx] : userTeam;
+
+  const triggerShutterFlash = () => {
+    setCameraFlash(true);
+    window.setTimeout(() => setCameraFlash(false), 220);
+  };
 
   const myMatchForBans = myWeekMatch || nextUserMatch;
   const nextOppIdx = myMatchForBans
@@ -169,6 +207,39 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
         ['leaders', 'Gol & Asist Krallığı'],
         ['news', `Lig Haberleri (${league.newsFeed.length})`],
       ];
+
+  const knockoutStages = [
+    {
+      leg1Idx: 8,
+      leg2Idx: 9,
+      title: 'Play-Off Eleme Turu (Rövanşlı)',
+      desc: 'Lig aşamasını 9–24. sırada tamamlayan takımların çift maçlı eleme mücadelesi',
+    },
+    {
+      leg1Idx: 10,
+      leg2Idx: 11,
+      title: 'Son 16 Turu (Rövanşlı)',
+      desc: 'İlk 8 sıradaki takımlar ile Play-Off turunu geçen 8 takımın çift maçlı eşleşmeleri',
+    },
+    {
+      leg1Idx: 12,
+      leg2Idx: 13,
+      title: 'Çeyrek Final (Rövanşlı)',
+      desc: 'Son 8 takım arasında çift maçlı eleme turu',
+    },
+    {
+      leg1Idx: 14,
+      leg2Idx: 15,
+      title: 'Yarı Final (Rövanşlı)',
+      desc: 'Finale yükselmek için son 4 takımın çift maçlı mücadelesi',
+    },
+    {
+      leg1Idx: 16,
+      leg2Idx: null,
+      title: 'UEFA Şampiyonlar Ligi Finali (Tek Maç)',
+      desc: 'Tarafsız sahada tek maç üzerinden Avrupa Şampiyonluğu',
+    },
+  ] as const;
 
   return (
     <section aria-label={`${league.leagueName} Kariyer Merkezi`} className="relative space-y-4">
@@ -268,36 +339,6 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
           </div>
         </div>
 
-        {isUcl && (
-          <div className="relative z-10 mt-3.5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-400/25 bg-[#040a21]/80 px-3.5 py-2">
-            <div className="flex items-center gap-2">
-              <img
-                src={UCL_BRAND_LOGOS.starballWhite}
-                alt="UCL"
-                className="h-5 w-5 object-contain"
-              />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-sky-200/90">
-                UEFA Champions League · Resmi Sponsorlar
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-4">
-              {UCL_BRAND_LOGOS.sponsors.map((sp) => (
-                <div
-                  key={sp.name}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1"
-                  title={sp.name}
-                >
-                  <img
-                    src={sp.logo}
-                    alt={sp.name}
-                    className="h-4 w-auto max-w-[68px] object-contain"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {seasonOver && championTeam ? (
           <div className="relative z-10 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/50 bg-amber-950/35 p-4">
             <div className="flex items-center gap-3">
@@ -346,6 +387,14 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
                     🏟 {getTeamStadium(teams[(myMatchForBans || nextUserMatch).a])}
                   </span>
                 )}
+                {(myMatchForBans || nextUserMatch).leg === 2 &&
+                  (myMatchForBans || nextUserMatch).firstLegSc && (
+                    <span className="rounded border border-sky-400/35 bg-sky-950/60 px-2 py-0.5 text-[10px] font-bold text-sky-200">
+                      İlk Maç Skoru:{' '}
+                      {(myMatchForBans || nextUserMatch).firstLegSc![1]} -{' '}
+                      {(myMatchForBans || nextUserMatch).firstLegSc![0]}
+                    </span>
+                  )}
               </div>
 
               <div className="space-y-1">
@@ -411,8 +460,8 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
                 {getUclWeekTitle(league.week)}
               </div>
               <p className="mt-0.5 text-xs text-[var(--muted)]">
-                {league.week === 9 && userRank <= 8
-                  ? 'Takımın Lig Aşamasını ilk 8 sırada tamamladığı için doğrudan Son 16 turuna yükseldi! Play-Off turunu simüle ederek rakibini bekleyebilirsin.'
+                {(league.week === 9 || league.week === 10) && userRank <= 8
+                  ? 'Takımın Lig Aşamasını ilk 8 sırada tamamladığı için doğrudan Son 16 turuna yükseldi! Play-Off maçlarını simüle ederek rakibini bekleyebilirsin.'
                   : 'Bu turda takımının maçı bulunmuyor. Turnuvanın sıradaki eleme turunu simüle edebilirsin.'}
               </p>
             </div>
@@ -460,7 +509,7 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
               </span>
               <span className="inline-flex items-center gap-1.5 font-bold text-sky-300">
                 <span className="h-2.5 w-2.5 rounded-full bg-sky-400" />
-                9–24. Sıra: Play-Off Eleme Turu (9v23, 10v24, 11v21, 12v22...)
+                9–24. Sıra: Play-Off Eleme Turu
               </span>
               <span className="inline-flex items-center gap-1.5 font-bold text-rose-300">
                 <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
@@ -616,19 +665,13 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
 
       {isUcl && league.tab === 'bracket' && (
         <div className="relative z-10 space-y-4">
-          {(
-            [
-              { weekIdx: 8, title: 'Play-Off Eleme Turu (9-24. Sıralar)', desc: '9 vs 23 · 10 vs 24 · 11 vs 21 · 12 vs 22 · 13 vs 19 · 14 vs 20 · 15 vs 17 · 16 vs 18' },
-              { weekIdx: 9, title: 'Son 16 Turu', desc: 'İlk 8 Sıradaki Takımlar vs Play-Off Galipleri' },
-              { weekIdx: 10, title: 'Çeyrek Final', desc: 'Son 8 Takım' },
-              { weekIdx: 11, title: 'Yarı Final', desc: 'Son 4 Takım' },
-              { weekIdx: 12, title: 'UEFA Şampiyonlar Ligi Finali', desc: 'Büyük Final' },
-            ] as const
-          ).map((stage) => {
-            const matches = league.schedule[stage.weekIdx] || [];
+          {knockoutStages.map((stage) => {
+            const leg1Matches = league.schedule[stage.leg1Idx] || [];
+            const leg2Matches = stage.leg2Idx != null ? league.schedule[stage.leg2Idx] || [] : [];
+
             return (
               <div
-                key={stage.weekIdx}
+                key={stage.leg1Idx}
                 className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg"
               >
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-2">
@@ -637,58 +680,112 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
                     <p className="text-[11px] text-[var(--muted)]">{stage.desc}</p>
                   </div>
                   <span className="rounded-full bg-[var(--raised)] px-2.5 py-0.5 text-[10px] font-bold text-[var(--muted)]">
-                    {matches.length > 0 ? `${matches.length} Eşleşme` : 'Lig Aşaması Sonrası Belli Olacak'}
+                    {leg1Matches.length > 0
+                      ? `${leg1Matches.length} Eşleşme`
+                      : 'Önceki Tur Sonrası Belli Olacak'}
                   </span>
                 </div>
 
-                {matches.length === 0 ? (
+                {leg1Matches.length === 0 ? (
                   <p className="py-3 text-center text-xs text-[var(--muted)]">
                     Önceki aşama tamamlandığında eşleşmeler otomatik olarak burada yer alacak.
                   </p>
                 ) : (
                   <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-                    {matches.map((m, mIdx) => {
-                      const tA = teams[m.a];
-                      const tB = teams[m.b];
-                      const stadium = getTeamStadium(tA);
+                    {leg1Matches.map((m1, mIdx) => {
+                      const m2 = leg2Matches[mIdx];
+                      const tA = teams[m1.a];
+                      const tB = teams[m1.b];
+                      const tieWinner = m2 ? m2.winner : m1.winner;
+                      // Aggregate goals in terms of [tA, tB]
+                      const aggA =
+                        m1.done && m1.sc
+                          ? m1.sc[0] + (m2 && m2.done && m2.sc ? m2.sc[1] : 0)
+                          : null;
+                      const aggB =
+                        m1.done && m1.sc
+                          ? m1.sc[1] + (m2 && m2.done && m2.sc ? m2.sc[0] : 0)
+                          : null;
+
                       return (
                         <div
-                          key={`${stage.weekIdx}_${mIdx}`}
+                          key={`${stage.leg1Idx}_${mIdx}`}
                           className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3"
                         >
                           <div className="mb-1.5 flex items-center justify-between text-[10px] font-bold text-sky-300/90">
-                            <span>{m.stageLabel || stage.title}</span>
-                            {stadium && <span className="text-[var(--muted)]">🏟 {stadium}</span>}
+                            <span>
+                              {stage.leg2Idx != null
+                                ? `${mIdx + 1}. Eşleşme (Çift Maç)`
+                                : m1.stageLabel || stage.title}
+                            </span>
+                            {m2 && m2.done && aggA != null && aggB != null && (
+                              <span className="rounded bg-sky-500/20 px-2 py-0.5 font-mono-tab text-[10px] text-sky-200">
+                                Toplam: {aggA} - {aggB}
+                                {m2.pen ? ` (P ${m2.pen[1]}-${m2.pen[0]})` : ''}
+                              </span>
+                            )}
                           </div>
+
                           <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-xs">
                             <div className="flex min-w-0 items-center justify-end gap-1.5 text-right">
                               <span
                                 className={`truncate font-bold ${
-                                  m.winner === m.a ? 'text-emerald-300' : 'text-white'
+                                  tieWinner === m1.a ? 'text-emerald-300' : 'text-white'
                                 }`}
                               >
                                 {tA?.name}
                               </span>
                               <TeamIdentityBadge team={tA} size={20} className="shrink-0" />
                             </div>
+
                             <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-center font-mono-tab font-extrabold text-white">
-                              {m.done && m.sc
-                                ? `${m.sc[0]} - ${m.sc[1]}${
-                                    m.pen ? ` (P ${m.pen[0]}-${m.pen[1]})` : ''
-                                  }`
+                              {stage.leg2Idx == null
+                                ? m1.done && m1.sc
+                                  ? `${m1.sc[0]} - ${m1.sc[1]}${
+                                      m1.pen ? ` (P ${m1.pen[0]}-${m1.pen[1]})` : ''
+                                    }`
+                                  : 'vs'
+                                : m2 && m2.done && aggA != null && aggB != null
+                                ? `${aggA} - ${aggB}`
+                                : m1.done && m1.sc
+                                ? `${m1.sc[0]} - ${m1.sc[1]}`
                                 : 'vs'}
                             </div>
+
                             <div className="flex min-w-0 items-center justify-start gap-1.5 text-left">
                               <TeamIdentityBadge team={tB} size={20} className="shrink-0" />
                               <span
                                 className={`truncate font-bold ${
-                                  m.winner === m.b ? 'text-emerald-300' : 'text-white'
+                                  tieWinner === m1.b ? 'text-emerald-300' : 'text-white'
                                 }`}
                               >
                                 {tB?.name}
                               </span>
                             </div>
                           </div>
+
+                          {stage.leg2Idx != null && (
+                            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)]/60 pt-1.5 font-mono-tab text-[10px] text-[var(--muted)]">
+                              <span>
+                                1. Maç ({tA?.name} ev):{' '}
+                                <strong className="text-white">
+                                  {m1.done && m1.sc ? `${m1.sc[0]} - ${m1.sc[1]}` : 'Oynanmadı'}
+                                </strong>
+                              </span>
+                              {m2 && (
+                                <span>
+                                  Rövanş ({tB?.name} ev):{' '}
+                                  <strong className="text-white">
+                                    {m2.done && m2.sc
+                                      ? `${m2.sc[0]} - ${m2.sc[1]}${
+                                          m2.pen ? ` (P ${m2.pen[0]}-${m2.pen[1]})` : ''
+                                        }`
+                                      : 'Oynanmadı'}
+                                  </strong>
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -804,6 +901,13 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
                       </span>
                     </div>
                   </div>
+
+                  {m.leg === 2 && m.done && m.aggSc && (
+                    <div className="mt-1 text-center font-mono-tab text-[10px] font-bold text-sky-300">
+                      Toplam Skor: {m.aggSc[0]} - {m.aggSc[1]}
+                      {m.winner != null ? ` · Turu Geçen: ${teams[m.winner]?.name}` : ''}
+                    </div>
+                  )}
 
                   {m.redCards && m.redCards.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap justify-center gap-1.5 border-t border-[var(--border)]/60 pt-1.5 text-[10px] text-red-300">
@@ -963,7 +1067,430 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
         </div>
       )}
 
-      {myActiveEvent && (
+      {/* UEFA Champions League Press Conference Studio Modal */}
+      {activePressConference && activePressTeamIdx != null && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="press-conference-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 sm:p-5 backdrop-blur-md"
+        >
+          <div className="relative w-full max-w-3xl overflow-hidden rounded-2xl border-2 border-sky-400/50 bg-[#050d28] shadow-[0_24px_80px_rgba(0,0,0,0.9)]">
+            {/* Camera Shutter Flash Effect */}
+            {cameraFlash && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-40 bg-white/40 transition-opacity duration-200"
+              />
+            )}
+
+            {/* Broadcast Camera Viewfinder Overlay */}
+            <div className="relative border-b border-sky-400/30 bg-[#03081a] px-4 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono-tab">
+                <div className="flex items-center gap-2.5">
+                  <span className="inline-flex items-center gap-1.5 rounded bg-red-600/90 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white shadow">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                    REC
+                  </span>
+                  <span className="font-bold text-sky-300">
+                    UEFA MEDIA BROADCAST · CAM 01
+                  </span>
+                  <span className="hidden text-sky-200/60 sm:inline">
+                    1080p 50fps · CANLI YAYIN
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-sky-200/80">
+                  <span>
+                    OYUNCU: <strong className="text-white">{activePressTeam?.name}</strong>
+                  </span>
+                  <span className="rounded border border-sky-400/30 bg-sky-950/60 px-2 py-0.5 text-[10px] text-sky-200">
+                    {activePressConference.week}. Hafta Sonu
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Sponsor Backdrop Wall (UEFA Media Backdrop) + Studio Stage */}
+            <div className="relative overflow-hidden bg-gradient-to-b from-[#071642] via-[#061133] to-[#040a1e] p-4 sm:p-6">
+              {/* Camera Viewfinder Corner Brackets */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-3 h-5 w-5 border-l-2 border-t-2 border-sky-300/50"
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute right-3 top-3 h-5 w-5 border-r-2 border-t-2 border-sky-300/50"
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-3 left-3 h-5 w-5 border-b-2 border-l-2 border-sky-300/50"
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-3 right-3 h-5 w-5 border-b-2 border-r-2 border-sky-300/50"
+              />
+
+              {/* Sponsor Logo Wall Grid (Behind Manager) */}
+              <div
+                aria-label="UEFA Basın Toplantısı Sponsor Panosu"
+                className="mb-4 rounded-xl border border-sky-300/20 bg-[#030b24]/90 p-3 shadow-inner"
+              >
+                <div className="mb-2 flex items-center justify-between text-[9px] font-extrabold uppercase tracking-widest text-sky-300/75">
+                  <span className="inline-flex items-center gap-1.5">
+                    <img
+                      src={UCL_BRAND_LOGOS.starballWhite}
+                      alt=""
+                      className="h-3.5 w-3.5 object-contain"
+                    />
+                    UEFA CHAMPIONS LEAGUE · PRESS CONFERENCE BACKDROP
+                  </span>
+                  <span>OFFICIAL MEDIA CENTER</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                  <div className="flex h-8 items-center justify-center rounded border border-[#1d4ed8]/60 bg-gradient-to-r from-[#003791] to-[#0052cc] px-2">
+                    <img
+                      src={UCL_BRAND_LOGOS.sponsors[1]?.logo}
+                      alt="PlayStation"
+                      className="h-4 w-auto object-contain"
+                    />
+                  </div>
+                  <div className="flex h-8 items-center justify-center rounded border border-emerald-500/50 bg-gradient-to-r from-[#00592d] to-[#00843d] px-2">
+                    <img
+                      src={UCL_BRAND_LOGOS.heinekenWhite}
+                      alt="Heineken"
+                      className="h-4 w-auto object-contain"
+                    />
+                  </div>
+                  <div className="flex h-8 items-center justify-center rounded border border-amber-500/40 bg-[#0d1528] px-2">
+                    <img
+                      src={UCL_BRAND_LOGOS.sponsors[0]?.logo}
+                      alt="Mastercard"
+                      className="h-4 w-auto object-contain"
+                    />
+                  </div>
+                  <div className="flex h-8 items-center justify-center rounded border border-yellow-400/50 bg-gradient-to-r from-[#b91c1c] to-[#d97706] px-2">
+                    <img
+                      src={UCL_BRAND_LOGOS.sponsors[3]?.logo}
+                      alt="Lay's"
+                      className="h-4 w-auto object-contain"
+                    />
+                  </div>
+                  <div className="hidden h-8 items-center justify-center rounded border border-[#1d4ed8]/60 bg-gradient-to-r from-[#003791] to-[#0052cc] px-2 sm:flex">
+                    <img
+                      src={UCL_BRAND_LOGOS.sponsors[1]?.logo}
+                      alt="PlayStation"
+                      className="h-4 w-auto object-contain"
+                    />
+                  </div>
+                  <div className="hidden h-8 items-center justify-center rounded border border-emerald-500/50 bg-gradient-to-r from-[#00592d] to-[#00843d] px-2 sm:flex">
+                    <img
+                      src={UCL_BRAND_LOGOS.heinekenWhite}
+                      alt="Heineken"
+                      className="h-4 w-auto object-contain"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Manager Podium & Microphones */}
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-400/30 bg-[#08153d]/90 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <TeamIdentityBadge team={activePressTeam} size={42} />
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-sky-300">
+                      Basın Kürsüsü · Teknik Direktör
+                    </div>
+                    <div className="text-base font-extrabold text-white">
+                      {activePressConference.teamName}
+                    </div>
+                    <div className="text-[11px] text-sky-200/80">
+                      Son Maç: {activePressConference.lastMatchSummary}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Broadcast Microphones on Desk */}
+                <div className="flex items-center gap-1.5">
+                  {['SKY', 'BBC', 'UEFA', 'ATH'].map((mic) => (
+                    <div
+                      key={mic}
+                      className="flex flex-col items-center"
+                      title={`${mic} Mikrofonu`}
+                    >
+                      <span className=" rounded-t-full border border-white/25 bg-slate-800 px-1.5 py-0.5 font-mono-tab text-[8px] font-extrabold text-sky-200">
+                        🎙 {mic}
+                      </span>
+                      <span className="h-2.5 w-1 bg-slate-600" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* STEP 1: INVITATION */}
+              {activePressConference.status === 'invited' && (
+                <div className="space-y-4 rounded-xl border border-sky-400/35 bg-[#040c24]/95 p-4">
+                  <div>
+                    <span className="inline-block rounded bg-sky-500/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-300">
+                      UEFA Medya Daveti
+                    </span>
+                    <h2
+                      id="press-conference-title"
+                      className="mt-1.5 text-lg font-extrabold text-white"
+                    >
+                      {activePressConference.week}. Hafta Sonrası Basın Toplantısı Daveti
+                    </h2>
+                    <p className="mt-2 text-xs leading-relaxed text-sky-100/90">
+                      Basın salonu dolu: muhabirler {activePressConference.rank}. sıradaki{' '}
+                      {activePressConference.teamName} hakkında soru sormak için bekliyor. Son maçın
+                      sonucu: {activePressConference.lastMatchSummary}. Katılırsan 3 soru gelecek;
+                      cevaplarının tonu moral ve kulüp kasasını etkileyebilir. Katılmak istiyor musun?
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerShutterFlash();
+                        onAcceptPressConference(activePressTeamIdx);
+                      }}
+                      className="rounded-xl border border-emerald-400/60 bg-emerald-600/90 px-4 py-3 text-left text-xs font-extrabold text-white shadow-lg transition hover:bg-emerald-500"
+                    >
+                      <div>🎙 Basın Toplantısına Katıl</div>
+                      <div className="mt-0.5 text-[10px] font-medium text-emerald-100">
+                        3 soru, cevapların moral ve kasayı etkiler
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDeclinePressConference(activePressTeamIdx);
+                      }}
+                      className="rounded-xl border border-rose-400/40 bg-rose-950/60 px-4 py-3 text-left text-xs font-extrabold text-rose-100 transition hover:bg-rose-900/70"
+                    >
+                      <div>🚪 Katılma (sözcü gönderilir)</div>
+                      <div className="mt-0.5 text-[10px] font-medium text-rose-200/80">
+                        Yenilgi sonrası çıkmamak moral kaybına yol açabilir
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: DECLINED */}
+              {activePressConference.status === 'declined' && (
+                <div className="space-y-4 rounded-xl border border-amber-400/40 bg-[#040c24]/95 p-4">
+                  <h2
+                    id="press-conference-title"
+                    className="text-base font-extrabold text-white"
+                  >
+                    Basın Toplantısı Raporu
+                  </h2>
+                  <p className="text-xs leading-relaxed text-sky-100/90">
+                    {activePressConference.declineOutcomeText}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span
+                      className={`rounded border px-2.5 py-1 text-xs font-bold ${
+                        (activePressConference.declineMoraleDelta || 0) < 0
+                          ? 'border-red-500/40 bg-red-950/60 text-red-300'
+                          : 'border-sky-400/30 bg-sky-950/60 text-sky-200'
+                      }`}
+                    >
+                      {(activePressConference.declineMoraleDelta || 0) < 0
+                        ? `Moral ${activePressConference.declineMoraleDelta}`
+                        : 'Etki Yok'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onClosePressConference(activePressTeamIdx)}
+                    className="w-full rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] py-2.5 text-xs font-bold text-white"
+                  >
+                    Kariyer Merkezine Dön
+                  </button>
+                </div>
+              )}
+
+              {/* STEP 3: IN PROGRESS (3 QUESTIONS) */}
+              {activePressConference.status === 'in_progress' && (
+                <div className="space-y-4">
+                  {/* Previous answer outcome banner if user already answered Q1 or Q2 */}
+                  {activePressConference.answers.length > 0 && (
+                    <div className="rounded-xl border border-sky-400/30 bg-[#03091c]/90 p-3 text-xs">
+                      {(() => {
+                        const lastLog =
+                          activePressConference.answers[
+                            activePressConference.answers.length - 1
+                          ];
+                        return (
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-sky-300">
+                                Önceki Cevabın Yansıması ({lastLog.media}):
+                              </span>
+                              <p className="mt-0.5 font-semibold text-white">
+                                “{lastLog.outcomeText}”
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1.5 font-mono-tab text-[11px] font-bold">
+                              <span
+                                className={`rounded border px-2 py-0.5 ${
+                                  lastLog.moraleDelta >= 0
+                                    ? 'border-emerald-500/40 bg-emerald-950/60 text-emerald-300'
+                                    : 'border-red-500/40 bg-red-950/60 text-red-300'
+                                }`}
+                              >
+                                Moral {lastLog.moraleDelta >= 0 ? `+${lastLog.moraleDelta}` : lastLog.moraleDelta}
+                              </span>
+                              {lastLog.fundsDelta !== 0 && (
+                                <span
+                                  className={`rounded border px-2 py-0.5 ${
+                                    lastLog.fundsDelta > 0
+                                      ? 'border-emerald-500/40 bg-emerald-950/60 text-emerald-300'
+                                      : 'border-red-500/40 bg-red-950/60 text-red-300'
+                                  }`}
+                                >
+                                  Kasa {lastLog.fundsDelta > 0 ? `+${lastLog.fundsDelta}` : lastLog.fundsDelta} M€
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {(() => {
+                    const qIdx = activePressConference.currentQIdx;
+                    const curQ = activePressConference.questions[qIdx];
+                    if (!curQ) return null;
+                    return (
+                      <div className="rounded-xl border border-sky-400/40 bg-[#040c24]/95 p-4">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <MediaLogoBadge source={curQ.media} />
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                                Soru {qIdx + 1} / {activePressConference.questions.length} · Canlı Soru
+                              </span>
+                              <h2
+                                id="press-conference-title"
+                                className="text-base font-extrabold text-white"
+                              >
+                                {curQ.media} Muhabiri Soruyor
+                              </h2>
+                            </div>
+                          </div>
+                          <span className="rounded-full border border-sky-400/30 bg-sky-950/70 px-2.5 py-0.5 text-[10px] font-bold text-sky-200">
+                            📸 Basın Salonu Canlı
+                          </span>
+                        </div>
+
+                        <blockquote className="mb-4 rounded-xl border-l-4 border-l-sky-400 bg-[#08163f]/80 p-3.5 text-sm font-bold italic text-sky-100">
+                          “{curQ.questionText}”
+                        </blockquote>
+
+                        <div className="space-y-2">
+                          {curQ.choices.map((ch, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                triggerShutterFlash();
+                                onAnswerPressConference(activePressTeamIdx, idx);
+                              }}
+                              className="w-full rounded-xl border border-sky-400/25 bg-[#0a1944]/90 px-4 py-3 text-left text-xs font-semibold text-white transition hover:border-sky-300 hover:bg-[#102663]"
+                            >
+                              <span className="mr-2 inline-block rounded bg-sky-500/30 px-1.5 py-0.5 font-mono-tab text-[10px] font-extrabold text-sky-200">
+                                {ch.tone}
+                              </span>
+                              {ch.text}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* STEP 4: COMPLETED SUMMARY */}
+              {activePressConference.status === 'completed' && (
+                <div className="space-y-4 rounded-xl border border-emerald-400/40 bg-[#040c24]/95 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sky-400/20 pb-2.5">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                        Basın Toplantısı Tamamlandı
+                      </span>
+                      <h2
+                        id="press-conference-title"
+                        className="text-base font-extrabold text-white"
+                      >
+                        {activePressConference.headline || 'Medya Manşetleri & Kulüp Etkisi'}
+                      </h2>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {activePressConference.answers.map((log, i) => (
+                      <div
+                        key={i}
+                        className="rounded-xl border border-sky-400/20 bg-[#08153b]/80 p-3 text-xs"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-bold text-sky-300">
+                            {i + 1}. Soru · {log.media} Muhabiri ({log.chosenTone})
+                          </span>
+                          <div className="flex items-center gap-1.5 font-mono-tab text-[10px] font-bold">
+                            <span
+                              className={`rounded px-2 py-0.5 ${
+                                log.moraleDelta >= 0
+                                  ? 'bg-emerald-950/80 text-emerald-300'
+                                  : 'bg-red-950/80 text-red-300'
+                              }`}
+                            >
+                              Moral {log.moraleDelta >= 0 ? `+${log.moraleDelta}` : log.moraleDelta}
+                            </span>
+                            {log.fundsDelta !== 0 && (
+                              <span
+                                className={`rounded px-2 py-0.5 ${
+                                  log.fundsDelta > 0
+                                    ? 'bg-emerald-950/80 text-emerald-300'
+                                    : 'bg-red-950/80 text-red-300'
+                                }`}
+                              >
+                                Kasa {log.fundsDelta > 0 ? `+${log.fundsDelta}` : log.fundsDelta} M€
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <p className="mt-1 text-[11px] text-sky-200/75">
+                          Cevabın: “{log.chosenText}”
+                        </p>
+                        <p className="mt-1 font-semibold text-white">
+                          Manşet: {log.outcomeText}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => onClosePressConference(activePressTeamIdx)}
+                    className="w-full rounded-xl border border-[var(--pri-bright)] bg-[var(--pri)] py-2.5 text-xs font-bold text-white"
+                  >
+                    Basın Toplantısını Bitir ve Devam Et
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!activePressConference && myActiveEvent && (
         <div
           role="dialog"
           aria-modal="true"
@@ -1018,7 +1545,7 @@ export const CareerHubView: React.FC<CareerHubViewProps> = ({
         </div>
       )}
 
-      {!myActiveEvent && league.activeNews && (
+      {!activePressConference && !myActiveEvent && league.activeNews && (
         <div
           role="dialog"
           aria-modal="true"

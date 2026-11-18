@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { FORMATIONS } from '../data/database';
+import { UCL_BRAND_LOGOS } from '../data/logos';
 import { isPeerReadyForPhase } from '../services/onlineNet';
 import type {
   DraftState,
@@ -88,6 +89,9 @@ export const LineupView: React.FC<LineupViewProps> = ({
   };
 
   const myReady = isPeerReadyForPhase(net, 'lineup', net.myTeamIdx);
+  const psLogo = UCL_BRAND_LOGOS.sponsors.find((s) => s.name === 'PlayStation')?.logo || '';
+  const mcLogo = UCL_BRAND_LOGOS.sponsors.find((s) => s.name === 'Mastercard')?.logo || '';
+  const laysLogo = UCL_BRAND_LOGOS.sponsors.find((s) => s.name === "Lay's")?.logo || '';
 
   return (
     <section aria-label="Kadro Dizilişi ve İlk 11" className="space-y-4">
@@ -237,73 +241,166 @@ export const LineupView: React.FC<LineupViewProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.15fr_1fr]">
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg">
-          <div className="pitch-surface mx-auto max-w-[460px]" data-testid="lineup-pitch">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-[27%] bottom-0 h-[13%] rounded-t-sm border-2 border-b-0 border-[var(--line)]"
-            />
-            {pitchRows.map((row) => (
-              <div
-                key={row.label}
-                data-pitch-row={row.pos}
-                className="relative z-10 flex flex-col items-center gap-1"
-              >
-                <span className="rounded bg-black/45 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-200/80">
-                  {row.label} ({FORMATIONS[team.formation || '4-3-3'].quota[row.pos]} {row.pos})
-                </span>
-                <div className="flex w-full flex-wrap items-center justify-around gap-1 px-0.5 sm:gap-1.5 sm:px-1">
-                  {row.players.map((p) => {
-                    const outOfPos = p.pos !== row.pos;
-                    const suspended = isPlayerSuspendedInCareer(p.id, league, isCareer);
-                    const injured =
-                      !suspended && isPlayerUnavailableInCareer(p.id, league, isCareer);
-                    const isSelected = selectedPlayerId === p.id;
-                    const wLeft = league?.injuries?.[p.id] || 0;
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.18fr_1fr]">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 sm:p-4 shadow-lg">
+          <div className="mx-auto max-w-[540px]" data-testid="pitch-adboards-wrapper">
+            {/* Top LED Advertising Hoarding */}
+            <div className="mb-1.5 grid grid-cols-4 gap-1 rounded-t-xl border border-white/15 bg-[#050811] p-1 shadow-md">
+              <div className="flex h-7 items-center justify-center rounded bg-gradient-to-r from-[#003791] to-[#0052cc] px-2 shadow-inner">
+                <img src={psLogo} alt="PlayStation" className="h-4 w-auto object-contain" />
+              </div>
+              <div className="flex h-7 items-center justify-center rounded bg-gradient-to-r from-[#006800] to-[#009900] px-2 shadow-inner">
+                <img src={UCL_BRAND_LOGOS.heinekenWhite} alt="Heineken" className="h-4 w-auto object-contain" />
+              </div>
+              <div className="flex h-7 items-center justify-center rounded bg-gradient-to-r from-[#141824] to-[#23293d] px-2 shadow-inner">
+                <img src={mcLogo} alt="Mastercard" className="h-4 w-auto object-contain" />
+              </div>
+              <div className="flex h-7 items-center justify-center rounded bg-gradient-to-r from-[#b91c1c] to-[#dc2626] px-2 shadow-inner">
+                <img src={laysLogo} alt="Lay's" className="h-4 w-auto object-contain" />
+              </div>
+            </div>
 
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        title={`${p.n} · ${p.c}`}
-                        onClick={() => handlePlayerClick(p.id)}
-                        className={`flex min-w-[66px] max-w-[104px] flex-1 basis-0 flex-col items-center rounded-lg border px-1 py-1.5 text-center transition sm:min-w-[78px] sm:flex-none sm:basis-auto sm:px-1.5 ${
-                          isSelected
-                            ? 'scale-105 border-amber-300 bg-amber-900/85 ring-2 ring-amber-400/70'
-                            : suspended || injured
-                            ? 'border-red-500 bg-red-950/85'
-                            : outOfPos
-                            ? 'border-amber-400/70 bg-[#1c2312]/90'
-                            : 'border-emerald-400/45 bg-[#081512]/90 hover:border-emerald-300'
-                        }`}
-                      >
-                        <span className="w-full truncate text-[10px] font-bold text-emerald-50">
-                          {p.n}
-                        </span>
-                        <div className="mt-0.5 flex items-center justify-center gap-1">
-                          <ClubLogo club={p.c} size={14} />
-                          <span className="text-[9px] font-semibold text-emerald-200/80">{p.pos}</span>
-                          {outOfPos && (
-                            <span className="text-[8px] font-bold text-amber-300">Uyumsuz</span>
-                          )}
-                        </div>
-                        {suspended && (
-                          <span className="mt-0.5 rounded bg-red-600 px-1 text-[8px] font-extrabold text-white">
-                            CEZALI ({wLeft}M)
-                          </span>
-                        )}
-                        {injured && (
-                          <span className="mt-0.5 rounded bg-rose-700 px-1 text-[8px] font-extrabold text-white">
-                            SAKAT ({wLeft}H)
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
+            <div className="flex items-stretch gap-1.5">
+              {/* Left Touchline LED Ad Boards */}
+              <div
+                aria-hidden="true"
+                className="hidden w-9 shrink-0 flex-col justify-between gap-1.5 rounded-l-xl border border-white/15 bg-[#050811] p-1 sm:flex"
+              >
+                <div className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded bg-gradient-to-b from-[#003791] to-[#0052cc] py-2 shadow-inner">
+                  <img src={psLogo} alt="PlayStation" className="h-4 w-auto object-contain" />
+                  <span className="text-[7px] font-black uppercase tracking-tighter text-blue-100 [writing-mode:vertical-rl]">
+                    PLAYSTATION 5
+                  </span>
+                </div>
+                <div className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded bg-gradient-to-b from-[#006800] to-[#009900] py-2 shadow-inner">
+                  <img src={UCL_BRAND_LOGOS.heinekenWhite} alt="Heineken" className="h-3.5 w-auto object-contain" />
+                  <span className="text-[7px] font-black uppercase tracking-tighter text-emerald-100 [writing-mode:vertical-rl]">
+                    HEINEKEN
+                  </span>
+                </div>
+                <div className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded bg-gradient-to-b from-[#07143a] to-[#0c2461] py-2 shadow-inner">
+                  <img src={UCL_BRAND_LOGOS.starballWhite} alt="UCL" className="h-4 w-4 object-contain" />
+                  <span className="text-[7px] font-black uppercase tracking-tighter text-sky-200 [writing-mode:vertical-rl]">
+                    CHAMPIONS
+                  </span>
+                </div>
+                <div className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded bg-gradient-to-b from-[#b91c1c] to-[#dc2626] py-2 shadow-inner">
+                  <img src={laysLogo} alt="Lay's" className="h-4 w-auto object-contain" />
                 </div>
               </div>
-            ))}
+
+              {/* Main Pitch Surface */}
+              <div className="pitch-surface flex-1" data-testid="lineup-pitch">
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-[27%] bottom-0 h-[13%] rounded-t-sm border-2 border-b-0 border-[var(--line)]"
+                />
+                {pitchRows.map((row) => (
+                  <div
+                    key={row.label}
+                    data-pitch-row={row.pos}
+                    className="relative z-10 flex flex-col items-center gap-1"
+                  >
+                    <span className="rounded bg-black/45 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-200/80">
+                      {row.label} ({FORMATIONS[team.formation || '4-3-3'].quota[row.pos]} {row.pos})
+                    </span>
+                    <div className="flex w-full flex-wrap items-center justify-around gap-1 px-0.5 sm:gap-1.5 sm:px-1">
+                      {row.players.map((p) => {
+                        const outOfPos = p.pos !== row.pos;
+                        const suspended = isPlayerSuspendedInCareer(p.id, league, isCareer);
+                        const injured =
+                          !suspended && isPlayerUnavailableInCareer(p.id, league, isCareer);
+                        const isSelected = selectedPlayerId === p.id;
+                        const wLeft = league?.injuries?.[p.id] || 0;
+
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            title={`${p.n} · ${p.c}`}
+                            onClick={() => handlePlayerClick(p.id)}
+                            className={`flex min-w-[66px] max-w-[104px] flex-1 basis-0 flex-col items-center rounded-lg border px-1 py-1.5 text-center transition sm:min-w-[78px] sm:flex-none sm:basis-auto sm:px-1.5 ${
+                              isSelected
+                                ? 'scale-105 border-amber-300 bg-amber-900/85 ring-2 ring-amber-400/70'
+                                : suspended || injured
+                                ? 'border-red-500 bg-red-950/85'
+                                : outOfPos
+                                ? 'border-amber-400/70 bg-[#1c2312]/90'
+                                : 'border-emerald-400/45 bg-[#081512]/90 hover:border-emerald-300'
+                            }`}
+                          >
+                            <span className="w-full truncate text-[10px] font-bold text-emerald-50">
+                              {p.n}
+                            </span>
+                            <div className="mt-0.5 flex items-center justify-center gap-1">
+                              <ClubLogo club={p.c} size={14} />
+                              <span className="text-[9px] font-semibold text-emerald-200/80">{p.pos}</span>
+                              {outOfPos && (
+                                <span className="text-[8px] font-bold text-amber-300">Uyumsuz</span>
+                              )}
+                            </div>
+                            {suspended && (
+                              <span className="mt-0.5 rounded bg-red-600 px-1 text-[8px] font-extrabold text-white">
+                                CEZALI ({wLeft}M)
+                              </span>
+                            )}
+                            {injured && (
+                              <span className="mt-0.5 rounded bg-rose-700 px-1 text-[8px] font-extrabold text-white">
+                                SAKAT ({wLeft}H)
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Right Touchline LED Ad Boards */}
+              <div
+                aria-hidden="true"
+                className="hidden w-9 shrink-0 flex-col justify-between gap-1.5 rounded-r-xl border border-white/15 bg-[#050811] p-1 sm:flex"
+              >
+                <div className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded bg-gradient-to-b from-[#006800] to-[#009900] py-2 shadow-inner">
+                  <img src={UCL_BRAND_LOGOS.heinekenWhite} alt="Heineken" className="h-3.5 w-auto object-contain" />
+                  <span className="text-[7px] font-black uppercase tracking-tighter text-emerald-100 [writing-mode:vertical-rl]">
+                    HEINEKEN
+                  </span>
+                </div>
+                <div className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded bg-gradient-to-b from-[#003791] to-[#0052cc] py-2 shadow-inner">
+                  <img src={psLogo} alt="PlayStation" className="h-4 w-auto object-contain" />
+                  <span className="text-[7px] font-black uppercase tracking-tighter text-blue-100 [writing-mode:vertical-rl]">
+                    PLAYSTATION 5
+                  </span>
+                </div>
+                <div className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded bg-gradient-to-b from-[#141824] to-[#23293d] py-2 shadow-inner">
+                  <img src={mcLogo} alt="Mastercard" className="h-4 w-auto object-contain" />
+                  <span className="text-[7px] font-black uppercase tracking-tighter text-amber-200 [writing-mode:vertical-rl]">
+                    PRICELESS
+                  </span>
+                </div>
+                <div className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded bg-gradient-to-b from-[#07143a] to-[#0c2461] py-2 shadow-inner">
+                  <img src={UCL_BRAND_LOGOS.starballWhite} alt="UCL" className="h-4 w-4 object-contain" />
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom LED Advertising Hoarding */}
+            <div className="mt-1.5 grid grid-cols-4 gap-1 rounded-b-xl border border-white/15 bg-[#050811] p-1 shadow-md">
+              <div className="flex h-7 items-center justify-center rounded bg-gradient-to-r from-[#006800] to-[#009900] px-2 shadow-inner">
+                <img src={UCL_BRAND_LOGOS.heinekenWhite} alt="Heineken" className="h-4 w-auto object-contain" />
+              </div>
+              <div className="flex h-7 items-center justify-center rounded bg-gradient-to-r from-[#003791] to-[#0052cc] px-2 shadow-inner">
+                <img src={psLogo} alt="PlayStation" className="h-4 w-auto object-contain" />
+              </div>
+              <div className="flex h-7 items-center justify-center rounded bg-gradient-to-r from-[#b91c1c] to-[#dc2626] px-2 shadow-inner">
+                <img src={laysLogo} alt="Lay's" className="h-4 w-auto object-contain" />
+              </div>
+              <div className="flex h-7 items-center justify-center rounded bg-gradient-to-r from-[#141824] to-[#23293d] px-2 shadow-inner">
+                <img src={mcLogo} alt="Mastercard" className="h-4 w-auto object-contain" />
+              </div>
+            </div>
           </div>
         </div>
 

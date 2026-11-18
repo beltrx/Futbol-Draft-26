@@ -184,6 +184,11 @@ export const MatchView: React.FC<MatchViewProps> = ({
             >
               {match.sc[0]} - {match.sc[1]}
             </div>
+            {isUcl && (currentMatchWeek === 10 || currentMatchWeek === 12 || currentMatchWeek === 14 || currentMatchWeek === 16) && (
+              <span className="mt-1 rounded bg-blue-950/80 px-2.5 py-0.5 font-mono-tab text-[11px] font-bold text-sky-200">
+                Toplam Skor: {match.sc[0] + (match.plan.aggOffset?.[0] || 0)} - {match.sc[1] + (match.plan.aggOffset?.[1] || 0)} (İlk Maç: {match.plan.aggOffset?.[1] || 0}-{match.plan.aggOffset?.[0] || 0})
+              </span>
+            )}
             {match.penSc && (
               <span className="mt-1 text-xs font-bold text-amber-300">
                 Penaltılar: {match.penSc[0]} - {match.penSc[1]}
@@ -200,19 +205,6 @@ export const MatchView: React.FC<MatchViewProps> = ({
             </div>
           </div>
         </div>
-
-        {isUcl && (
-          <div className="relative z-10 mt-3.5 flex flex-wrap items-center justify-center gap-4 rounded-xl border border-blue-400/20 bg-[#02081b]/70 px-3 py-1.5">
-            <span className="text-[9px] font-extrabold uppercase tracking-widest text-blue-200/60">
-              Resmi Sponsorlar
-            </span>
-            {UCL_BRAND_LOGOS.sponsors.map((sp) => (
-              <div key={sp.name} className="flex items-center gap-1.5 opacity-85">
-                <img src={sp.logo} alt={sp.name} className="h-3.5 w-auto max-w-[54px] object-contain" />
-              </div>
-            ))}
-          </div>
-        )}
 
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2 border-t border-[var(--border)] pt-3">
           {!finished && (

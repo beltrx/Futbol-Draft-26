@@ -30,12 +30,55 @@ export function posCountsOf(team: Pick<Team, 'picks'>): Record<Position, number>
   return counts;
 }
 
+function ensureDraftPoolCache(
+  g: Pick<DraftState, 'pool' | 'taken' | '_cacheTakenSize' | '_cheapestByPos' | '_cheapestAll'>
+): {
+  byPos: Record<Position, { id: number; cost: number }[]>;
+  all: { id: number; cost: number }[];
+} {
+  if (
+    g._cacheTakenSize === g.taken.size &&
+    g._cheapestByPos &&
+    g._cheapestAll
+  ) {
+    return { byPos: g._cheapestByPos, all: g._cheapestAll };
+  }
+
+  const byPos: Record<Position, { id: number; cost: number }[]> = {
+    GK: [],
+    DEF: [],
+    MID: [],
+    FWD: [],
+  };
+  const all: { id: number; cost: number }[] = [];
+
+  for (let i = 0; i < g.pool.length; i++) {
+    const p = g.pool[i];
+    if (g.taken.has(p.id)) continue;
+    const item = { id: p.id, cost: cost(p) };
+    byPos[p.pos].push(item);
+    all.push(item);
+  }
+
+  for (const posKey of POSITIONS) {
+    byPos[posKey].sort((a, b) => a.cost - b.cost);
+  }
+  all.sort((a, b) => a.cost - b.cost);
+
+  g._cacheTakenSize = g.taken.size;
+  g._cheapestByPos = byPos;
+  g._cheapestAll = all;
+
+  return { byPos, all };
+}
+
 export function canTeamPickPos(
   team: Pick<Team, 'picks'>,
   pos: Position,
   pool: Player[],
   taken: Set<number>,
-  strictPos = true
+  strictPos = true,
+  cachedByPos?: Record<Position, { id: number; cost: number }[]>
 ): boolean {
   if (!strictPos) return true;
   const counts = posCountsOf(team);
@@ -53,11 +96,23 @@ export function canTeamPickPos(
   if (missingByPos[k] > 0) return true;
 
   if (remSlots <= totalMandatoryMissing) {
+    if (cachedByPos) {
+      const anyNeededAvailable = POSITIONS.some(
+        (posKey) => missingByPos[posKey] > 0 && cachedByPos[posKey].length > 0
+      );
+      return !anyNeededAvailable;
+    }
     const anyNeededAvailable = pool.some((p) => !taken.has(p.id) && missingByPos[p.pos] > 0);
     return !anyNeededAvailable;
   }
 
   if (k === 'GK' && counts.GK >= 2) {
+    if (cachedByPos) {
+      const nonGkAvail =
+        cachedByPos.DEF.length > 0 || cachedByPos.MID.length > 0 || cachedByPos.FWD.length > 0;
+      if (nonGkAvail) return false;
+      return true;
+    }
     const nonGkAvail = pool.some((p) => !taken.has(p.id) && p.pos !== 'GK');
     if (nonGkAvail) return false;
   }
@@ -66,7 +121,7 @@ export function canTeamPickPos(
 }
 
 export function calcMinReserveAfterPick(
-  g: Pick<DraftState, 'pool' | 'taken'>,
+  g: Pick<DraftState, 'pool' | 'taken' | '_cacheTakenSize' | '_cheapestByPos' | '_cheapestAll'>,
   t: Pick<Team, 'picks'>,
   candidateP: { id: number; pos?: Position },
   strictPos = true
@@ -74,13 +129,17 @@ export function calcMinReserveAfterPick(
   const remSlots = ROUNDS - t.picks.length - 1;
   if (remSlots <= 0) return 0;
 
-  const untaken = g.pool.filter((x) => !g.taken.has(x.id) && x.id !== candidateP.id);
-  if (!untaken.length) return 0;
+  const { byPos, all } = ensureDraftPoolCache(g);
+  if (!all.length) return 0;
 
   if (!strictPos) {
-    const sortedCosts = untaken.map(cost).sort((a, b) => a - b);
     let sum = 0;
-    for (let i = 0; i < remSlots && i < sortedCosts.length; i++) sum += sortedCosts[i];
+    let picked = 0;
+    for (let i = 0; i < all.length && picked < remSlots; i++) {
+      if (all[i].id === candidateP.id) continue;
+      sum += all[i].cost;
+      picked++;
+    }
     return sum;
   }
 
@@ -90,37 +149,37 @@ export function calcMinReserveAfterPick(
 
   let reserve = 0;
   let slotsLeft = remSlots;
-  const usedIds = new Set<number>();
+  const usedIds = new Set<number>([candidateP.id]);
 
   for (const posKey of POSITIONS) {
     const need = Math.max(0, FORMATION_QUOTA[posKey] - (counts[posKey] || 0));
     if (need > 0) {
-      const posCheapest = untaken
-        .filter((x) => x.pos === posKey)
-        .sort((a, b) => cost(a) - cost(b));
-      for (let i = 0; i < need && slotsLeft > 0; i++) {
-        if (posCheapest[i]) {
-          reserve += cost(posCheapest[i]);
-          usedIds.add(posCheapest[i].id);
-          slotsLeft--;
-        }
+      const posCheapest = byPos[posKey];
+      let added = 0;
+      for (let i = 0; i < posCheapest.length && added < need && slotsLeft > 0; i++) {
+        const item = posCheapest[i];
+        if (usedIds.has(item.id)) continue;
+        reserve += item.cost;
+        usedIds.add(item.id);
+        added++;
+        slotsLeft--;
       }
     }
   }
 
   if (slotsLeft > 0) {
-    const restCheapest = untaken
-      .filter((x) => !usedIds.has(x.id))
-      .sort((a, b) => cost(a) - cost(b));
-    for (let i = 0; i < slotsLeft && i < restCheapest.length; i++) {
-      reserve += cost(restCheapest[i]);
+    for (let i = 0; i < all.length && slotsLeft > 0; i++) {
+      const item = all[i];
+      if (usedIds.has(item.id)) continue;
+      reserve += item.cost;
+      slotsLeft--;
     }
   }
   return reserve;
 }
 
 export function checkBudgetStatus(
-  g: Pick<DraftState, 'm' | 'pool' | 'taken'>,
+  g: Pick<DraftState, 'm' | 'pool' | 'taken' | '_cacheTakenSize' | '_cheapestByPos' | '_cheapestAll'>,
   t: Pick<Team, 'picks' | 'spent'>,
   p: Player,
   strictPos = true
@@ -151,7 +210,7 @@ export function checkBudgetStatus(
 }
 
 export function afford(
-  g: Pick<DraftState, 'm' | 'pool' | 'taken'>,
+  g: Pick<DraftState, 'm' | 'pool' | 'taken' | '_cacheTakenSize' | '_cheapestByPos' | '_cheapestAll'>,
   t: Pick<Team, 'picks' | 'spent'>,
   p: Player,
   strictPos = true
@@ -160,13 +219,14 @@ export function afford(
 }
 
 export function canPickPlayer(
-  g: Pick<DraftState, 'm' | 'pool' | 'taken'>,
+  g: Pick<DraftState, 'm' | 'pool' | 'taken' | '_cacheTakenSize' | '_cheapestByPos' | '_cheapestAll'>,
   t: Pick<Team, 'picks' | 'spent'>,
   p: Player,
   strictPos = true
 ): boolean {
   if (!g || g.taken.has(p.id)) return false;
-  if (!canTeamPickPos(t, p.pos, g.pool, g.taken, strictPos)) return false;
+  const { byPos } = ensureDraftPoolCache(g);
+  if (!canTeamPickPos(t, p.pos, g.pool, g.taken, strictPos, byPos)) return false;
   if (!afford(g, t, p, strictPos)) return false;
   return true;
 }
