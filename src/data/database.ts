@@ -6,6 +6,12 @@ import type {
   Player,
   Position,
 } from '../types/game';
+import {
+  EXTRA_ICONIC_CLUBS_DATA,
+  NATIONAL_ICONS_DATA,
+  PLAYER_META_BY_CLUB_NAME,
+  PLAYER_META_BY_NAME,
+} from './playerMetadata';
 
 export const LEAGUES_META = [
   { id: 'Premier Lig', name: 'Premier Lig', country: 'İngiltere' },
@@ -18,6 +24,7 @@ export const LEAGUES_META = [
   { id: 'Trendyol Süper Lig', name: 'Trendyol Süper Lig', country: 'Türkiye' },
   { id: 'Diğer Takımlar', name: 'Diğer Avrupa & Dünya', country: 'Uluslararası' },
   { id: 'İkonik Takımlar', name: 'İkonik Takımlar', country: 'Efsaneler' },
+  { id: 'Milli İkonlar', name: '20. YY Efsaneleri', country: 'Prime İkonlar' },
 ] as const;
 
 export const DATA: Record<string, [string, number][]> = {
@@ -931,8 +938,12 @@ export const CLUB_TO_LEAGUE: Record<string, string> = {
   'Roma 2000-01': 'İkonik Takımlar',
   'Lazio 1999-00': 'İkonik Takımlar',
   'Bayern Munchen 2012-13': 'İkonik Takımlar',
+  'Bayern Munchen 2019-20': 'İkonik Takımlar',
+  'Barcelona 2008-09': 'İkonik Takımlar',
   'Borussia Dortmund 2012-13': 'İkonik Takımlar',
   'RB Salzburg 2019-20': 'İkonik Takımlar',
+  // 20. YY Efsaneleri (Tek Havuz)
+  '20. YY Efsaneleri': 'Milli İkonlar',
 };
 
 export const PS: Record<string, string> = {
@@ -1067,6 +1078,8 @@ export const ICONIC_CLUBS: string[] = [
   'Roma 2000-01',
   'Lazio 1999-00',
   'Bayern Munchen 2012-13',
+  'Bayern Munchen 2019-20',
+  'Barcelona 2008-09',
   'Borussia Dortmund 2012-13',
   'RB Salzburg 2019-20',
 ];
@@ -1161,17 +1174,60 @@ const POS_CODE_MAP: Record<string, Position> = {
   F: 'FWD',
 };
 
-export const PLAYERS_POOL: Player[] = Object.entries(DATA).flatMap(([club, list]) => {
-  return list.map(([name, rating], idx) => ({
-    id: 0,
-    n: name,
-    c: club,
-    lg: CLUB_TO_LEAGUE[club] || 'Diğer Takımlar',
-    r: rating,
-    pos: POS_CODE_MAP[(PS[club] || '')[idx] || 'M'] || 'MID',
-    price: 0,
-  }));
-}).map((p, globalIdx) => ({
+function normalizePlayerNameKey(n: string): string {
+  return String(n || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+const BASE_PLAYERS_RAW: Omit<Player, 'id' | 'price'>[] = [
+  ...Object.entries(DATA).flatMap(([club, list]) => {
+    return list.map(([name, rating], idx) => {
+      const nk = normalizePlayerNameKey(name);
+      const meta = PLAYER_META_BY_CLUB_NAME[`${club}::${nk}`] || PLAYER_META_BY_NAME[nk];
+      return {
+        n: name,
+        c: club,
+        lg: CLUB_TO_LEAGUE[club] || 'Diğer Takımlar',
+        r: rating,
+        pos: POS_CODE_MAP[(PS[club] || '')[idx] || 'M'] || 'MID',
+        nat: meta?.[0],
+        age: meta?.[1] ?? null,
+        trait: meta?.[2],
+        role: meta?.[3],
+      };
+    });
+  }),
+  ...Object.entries(EXTRA_ICONIC_CLUBS_DATA).flatMap(([club, list]) =>
+    list.map((p) => ({
+      n: p.name,
+      c: club,
+      lg: 'İkonik Takımlar',
+      r: p.rating,
+      pos: p.pos,
+      nat: p.nat,
+      age: p.age,
+      trait: p.trait,
+      role: p.role,
+    }))
+  ),
+  ...NATIONAL_ICONS_DATA.map((p) => ({
+    n: p.name,
+    c: '20. YY Efsaneleri',
+    lg: 'Milli İkonlar',
+    r: p.rating,
+    pos: p.pos,
+    nat: p.nat,
+    age: null,
+    trait: p.trait,
+    role: p.role,
+    isNationalIcon: true,
+  })),
+];
+
+export const PLAYERS_POOL: Player[] = BASE_PLAYERS_RAW.map((p, globalIdx) => ({
   ...p,
   id: globalIdx,
   price: calcBasePriceWithVariance(p.n, p.r, globalIdx),
@@ -1183,18 +1239,31 @@ export const PLAYERS_BY_ID: Record<number, Player> = Object.fromEntries(
 
 export const ALL_CLUBS: string[] = [...new Set(PLAYERS_POOL.map(p => p.c))];
 export const ALL_LEAGUES: string[] = [...new Set(PLAYERS_POOL.map(p => p.lg))];
-export const MODERN_LEAGUES: string[] = ALL_LEAGUES.filter(l => l !== 'İkonik Takımlar');
+export const MODERN_LEAGUES: string[] = ALL_LEAGUES.filter(
+  l => l !== 'İkonik Takımlar' && l !== 'Milli İkonlar'
+);
 
 export const MODES: GameModeDef[] = [
   {
     id: 'career',
     name: 'Lig Kariyer Modu',
-    tag: '★ YENİ MOD · Şampiyonlar Ligi, Premier Lig, Bundesliga & Serie A',
-    d: '360 M€ bütçeyle kadronu kur; 36 takımlı yeni format UEFA Şampiyonlar Ligi, Premier Lig, Bundesliga veya Serie A maratonunda şampiyonluk mücadelesi ver!',
+    tag: 'Şampiyonlar Ligi · Premier Lig · Bundesliga · Serie A',
+    d: '360 M€ bütçeyle kadronu kur; 36 takımlı Şampiyonlar Ligi, Premier Lig, Bundesliga veya Serie A maratonunda yarış.',
     clubs: 'optional',
     cpu: 'best',
     budget: 360,
     career: 1,
+    special: 1,
+  },
+  {
+    id: 'auction',
+    name: 'Açık Artırma Draftı',
+    tag: 'Yeni · Teklif Savaşı',
+    d: 'Bütçenle sırayla oyuncu çıkar veya sistemin sunduğu yıldızlar için rakipler çekilene kadar teklif artır.',
+    clubs: 'optional',
+    cpu: 'best',
+    budget: 200,
+    auction: 1,
     special: 1,
   },
   {
@@ -1209,7 +1278,7 @@ export const MODES: GameModeDef[] = [
     id: 'wheel',
     name: 'Çark Draftı',
     tag: 'Takım Çarkı',
-    d: 'Seçilen takımlar çarka yerleşir; hem sen hem de yapay zeka çarkı döndürerek çıkan kulüpten oyuncu alır.',
+    d: 'Seçilen takımlar çarka yerleşir; çıkan kulüpten rastgele gelen 4 oyuncudan birini seçersin.',
     clubs: 'optional',
     cpu: 'wheel',
     wheel: 1,

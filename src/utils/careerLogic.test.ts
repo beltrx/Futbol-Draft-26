@@ -295,9 +295,10 @@ test('Ratings are hidden from all rival news badges and career event texts, and 
     }
   }
 
-  assert.equal(MODES.length, 4);
+  assert.equal(MODES.length, 5);
   const modeIds = new Set(MODES.map((m) => m.id));
   assert.equal(modeIds.has('career'), true);
+  assert.equal(modeIds.has('auction'), true);
   assert.equal(modeIds.has('classic'), true);
   assert.equal(modeIds.has('wheel'), true);
   assert.equal(modeIds.has('budget'), true);

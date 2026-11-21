@@ -224,9 +224,9 @@ export const LineupView: React.FC<LineupViewProps> = ({
           })}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="text-[11px] text-[var(--muted)]">
-            Yer değiştirmek için iki oyuncuya sırayla tıkla (mevki dışı uyum cezası uygulanır).
+            Yer değiştirmek için iki oyuncuya sırayla tıkla.
           </span>
           <button
             type="button"
@@ -487,8 +487,10 @@ export const LineupView: React.FC<LineupViewProps> = ({
                         )}
                       </div>
                       <span className="inline-flex shrink-0 items-center gap-1.5 text-[10px] text-[var(--muted)]">
+                        {p.nat && <span className="hidden sm:inline">{p.nat} ·</span>}
+                        {p.trait && <span className="hidden md:inline text-[var(--fg)]/80">{p.trait} ·</span>}
                         <ClubLogo club={p.c} size={15} />
-                        <span>{p.c}</span>
+                        <span className="max-w-[92px] truncate">{p.c}</span>
                       </span>
                     </button>
                   );

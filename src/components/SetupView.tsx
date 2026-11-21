@@ -1,7 +1,11 @@
 import React from 'react';
 import { MODES } from '../data/database';
 import { isPeerReadyForPhase } from '../services/onlineNet';
-import type { GameModeId, NetStateSnapshot } from '../types/game';
+import type {
+  AuctionNominationMode,
+  GameModeId,
+  NetStateSnapshot,
+} from '../types/game';
 import { LeagueLogo, OnlineReadyBadges } from './ClubBadge';
 
 interface SetupViewProps {
@@ -12,6 +16,8 @@ interface SetupViewProps {
   strictPos: boolean;
   teamName: string;
   careerLeague: string;
+  auctionNominationMode: AuctionNominationMode;
+  auctionBudget: number;
   err: string;
   net: NetStateSnapshot;
   onSelectMode: (modeId: GameModeId) => void;
@@ -21,6 +27,8 @@ interface SetupViewProps {
   onChangeStrictPos: (strict: boolean) => void;
   onChangeTeamName: (name: string) => void;
   onChangeCareerLeague: (league: string) => void;
+  onChangeAuctionNominationMode: (m: AuctionNominationMode) => void;
+  onChangeAuctionBudget: (b: number) => void;
   onContinueToClubs: () => void;
 }
 
@@ -32,6 +40,8 @@ export const SetupView: React.FC<SetupViewProps> = ({
   strictPos,
   teamName,
   careerLeague,
+  auctionNominationMode,
+  auctionBudget,
   err,
   net,
   onSelectMode,
@@ -41,10 +51,13 @@ export const SetupView: React.FC<SetupViewProps> = ({
   onChangeStrictPos,
   onChangeTeamName,
   onChangeCareerLeague,
+  onChangeAuctionNominationMode,
+  onChangeAuctionBudget,
   onContinueToClubs,
 }) => {
   const activeMode = MODES.find((m) => m.id === mode) || MODES[0];
   const isCareer = !!activeMode.career;
+  const isAuction = !!activeMode.auction;
   const isGuest = net.role === 'guest';
   const myReady = isPeerReadyForPhase(net, 'setup', net.myTeamIdx);
 
@@ -85,7 +98,7 @@ export const SetupView: React.FC<SetupViewProps> = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {MODES.map((m) => {
             const selected = m.id === mode;
             const disabledGuest = isGuest;
@@ -198,21 +211,69 @@ export const SetupView: React.FC<SetupViewProps> = ({
           </div>
 
           <div>
-            <label htmlFor="setup-format" className="mb-1 block text-xs font-semibold text-[var(--muted)]">
-              Draft Seçim Sırası
-            </label>
-            <select
-              id="setup-format"
-              disabled={isGuest}
-              value={format}
-              onChange={(e) => onChangeFormat(e.target.value as 'snake' | 'linear')}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--fg)] disabled:opacity-60"
-            >
-              <option value="snake">Yılan Sırası (1→2→2→1)</option>
-              <option value="linear">Sabit Sıra (1→2→1→2)</option>
-            </select>
+            {isAuction ? (
+              <>
+                <label htmlFor="setup-auction-mode" className="mb-1 block text-xs font-semibold text-[var(--muted)]">
+                  Açık Artırma Akışı
+                </label>
+                <select
+                  id="setup-auction-mode"
+                  disabled={isGuest}
+                  value={auctionNominationMode}
+                  onChange={(e) =>
+                    onChangeAuctionNominationMode(e.target.value as AuctionNominationMode)
+                  }
+                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--fg)] disabled:opacity-60"
+                >
+                  <option value="player">Sırayla Oyuncu Koyma</option>
+                  <option value="ai">Yapay Zeka Sunumu</option>
+                </select>
+              </>
+            ) : (
+              <>
+                <label htmlFor="setup-format" className="mb-1 block text-xs font-semibold text-[var(--muted)]">
+                  Draft Seçim Sırası
+                </label>
+                <select
+                  id="setup-format"
+                  disabled={isGuest}
+                  value={format}
+                  onChange={(e) => onChangeFormat(e.target.value as 'snake' | 'linear')}
+                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--fg)] disabled:opacity-60"
+                >
+                  <option value="snake">Yılan Sırası (1→2→2→1)</option>
+                  <option value="linear">Sabit Sıra (1→2→1→2)</option>
+                </select>
+              </>
+            )}
           </div>
         </div>
+
+        {isAuction && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-xs">
+            <span className="text-[var(--muted)]">
+              Takım Başına Açık Artırma Kasası (14 oyuncu · min $1/oyuncu):
+            </span>
+            <div className="flex items-center gap-1.5" role="group" aria-label="Açık Artırma Bütçesi">
+              {[150, 200, 300].map((b) => (
+                <button
+                  key={b}
+                  type="button"
+                  disabled={isGuest}
+                  aria-pressed={auctionBudget === b}
+                  onClick={() => onChangeAuctionBudget(b)}
+                  className={`rounded-md border px-3 py-1 font-mono-tab text-xs font-bold transition ${
+                    auctionBudget === b
+                      ? 'border-[var(--pri-bright)] bg-[var(--pri)] text-white'
+                      : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--fg)]'
+                  }`}
+                >
+                  ${b}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] pt-3.5">
           <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-[var(--fg)]">

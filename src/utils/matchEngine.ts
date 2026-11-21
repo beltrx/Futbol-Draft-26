@@ -18,6 +18,11 @@ import {
   getEffectivePlayerRating,
   groupStartersForPitch,
 } from './lineupLogic';
+import {
+  DEFAULT_TACTICS,
+  evaluateTacticalMatchup,
+  pickAiTacticsForTeam,
+} from './tacticsLogic';
 
 const av = (a: LineupPlayer[]): number =>
   a.reduce((s, p) => s + (p.effR != null ? p.effR : p.r), 0) / (a.length || 1);
@@ -81,7 +86,17 @@ export function pickGoalscorer(
     const indivWeights = activeGroup.map((p) => {
       const rVal = p.effR != null ? p.effR : p.r;
       const starBoost = rVal >= 89 ? 1.35 : rVal >= 85 ? 1.18 : 1.0;
-      return Math.pow(Math.max(6, rVal - 64), 2.1) * starBoost;
+      const traitBoost =
+        p.trait === 'Bitirici' ||
+        p.trait === 'Fırsatçı' ||
+        p.trait === 'Şutör' ||
+        p.trait === 'Şut Gücü' ||
+        p.role === 'Ceza Sahası Golcüsü' ||
+        p.role === 'Komple Forvet' ||
+        p.role === 'Fırsatçı Golcü'
+          ? 1.18
+          : 1.0;
+      return Math.pow(Math.max(6, rVal - 64), 2.1) * starBoost * traitBoost;
     });
     const sumIndiv = indivWeights.reduce((a, b) => a + b, 0) || 1;
     const avgGroupR =
@@ -119,7 +134,18 @@ export function pickAssister(
       if ((scorer && p.id === scorer.id) || sentOffSet.has(p.id)) return;
       const rVal = p.effR != null ? p.effR : p.r;
       const ratingFactor = Math.pow(Math.max(8, rVal - 60), 1.7);
-      weights.push([p, posMult * ratingFactor]);
+      const creatorBoost =
+        p.trait === 'Pasör' ||
+        p.trait === 'Kreatif' ||
+        p.trait === 'Orta Açma' ||
+        p.trait === 'Teknik' ||
+        p.role === 'Oyun Kurucu' ||
+        p.role === 'Derin Oyun Kurucu' ||
+        p.role === 'Ofansif Oyun Kurucu' ||
+        p.role === 'Ofansif Savunmacı'
+          ? 1.22
+          : 1.0;
+      weights.push([p, posMult * ratingFactor * creatorBoost]);
     });
   }
   if (!weights.length) return null;
@@ -218,8 +244,8 @@ export function rollMatchScoreline(
 }
 
 export function generateMatchPlan(
-  _teamA: Team,
-  _teamB: Team,
+  teamA: Team,
+  teamB: Team,
   sA: SideEvaluation,
   sB: SideEvaluation,
   allowExtraTime = true,
@@ -228,9 +254,29 @@ export function generateMatchPlan(
   const scheduledByMin: ScheduledMatchEvent[][] = Array.from({ length: 121 }, () => []);
   const sentOff: [Set<number>, Set<number>] = [new Set(), new Set()];
 
+  const tacA = teamA?.tactics || (teamA?.isHuman ? DEFAULT_TACTICS : pickAiTacticsForTeam(teamA));
+  const tacB = teamB?.tactics || (teamB?.isHuman ? DEFAULT_TACTICS : pickAiTacticsForTeam(teamB));
+  const matchup = evaluateTacticalMatchup(sA, sB, tacA, tacB);
+
+  const effSA: SideEvaluation = {
+    ...sA,
+    att: sA.att + matchup.attModA,
+    def: sA.def + matchup.defModA,
+    mid: sA.mid + matchup.midModA,
+    avg: sA.avg + (matchup.attModA + matchup.defModA + matchup.midModA) / 3,
+  };
+  const effSB: SideEvaluation = {
+    ...sB,
+    att: sB.att + matchup.attModB,
+    def: sB.def + matchup.defModB,
+    mid: sB.mid + matchup.midModB,
+    avg: sB.avg + (matchup.attModB + matchup.defModB + matchup.midModB) / 3,
+  };
+
   const redCardMinutes: [number | null, number | null] = [null, null];
+  const redProbs: [number, number] = [matchup.redProbA, matchup.redProbB];
   ([0, 1] as const).forEach((sideIdx) => {
-    if (Math.random() < 0.12) {
+    if (Math.random() < redProbs[sideIdx]) {
       const rcMin = 20 + ((Math.random() * 56) | 0);
       redCardMinutes[sideIdx] = rcMin;
       const sObj = sideIdx === 0 ? sA : sB;
@@ -248,7 +294,16 @@ export function generateMatchPlan(
     }
   });
 
-  const { goals: regGoals, netAdvantage } = rollMatchScoreline(sA, sB, redCardMinutes);
+  const { goals: rawGoals, netAdvantage } = rollMatchScoreline(effSA, effSB, redCardMinutes);
+  const regGoals: [number, number] = [rawGoals[0], rawGoals[1]];
+  if (matchup.goalPaceMod >= 0.7 && Math.random() < 0.22) {
+    const bumpSide: 0 | 1 = netAdvantage >= 0 ? 0 : 1;
+    regGoals[bumpSide] = Math.min(6, regGoals[bumpSide] + 1);
+  } else if (matchup.goalPaceMod <= -0.5 && regGoals[0] + regGoals[1] >= 4 && Math.random() < 0.3) {
+    if (regGoals[0] > 1 && regGoals[0] >= regGoals[1]) regGoals[0]--;
+    else if (regGoals[1] > 1) regGoals[1]--;
+  }
+
   const totRegA = regGoals[0] + (aggOffset[0] || 0);
   const totRegB = regGoals[1] + (aggOffset[1] || 0);
   const goesToET = totRegA === totRegB && allowExtraTime;
@@ -310,7 +365,8 @@ export function generateMatchPlan(
       finalWinnerSide = etWinner;
     } else {
       goesToPenalties = true;
-      const penWinner: 0 | 1 = Math.random() < 0.5 ? 0 : 1;
+      const penChanceA = Math.max(0.35, Math.min(0.65, 0.5 + matchup.penBonusA - matchup.penBonusB));
+      const penWinner: 0 | 1 = Math.random() < penChanceA ? 0 : 1;
       const penPatterns: [number, number][] = [
         [5, 4],
         [4, 3],
@@ -334,20 +390,22 @@ export function generateMatchPlan(
   }
 
   const maxMin = goesToET ? 120 : 90;
+  const eventDensity = Math.max(0.15, Math.min(0.28, 0.21 + matchup.goalPaceMod * 0.03));
   for (let m = 2; m < maxMin; m++) {
     if (m === 45 || m === 90 || m === 105 || scheduledByMin[m].length > 0) continue;
-    if (Math.random() < 0.21) {
+    if (Math.random() < eventDensity) {
       const attSide: 0 | 1 = Math.random() < 0.5 ? 0 : 1;
       const sideObj = attSide === 0 ? sA : sB;
       const oppObj = attSide === 0 ? sB : sA;
       const shooter = pickGoalscorer(sideObj.L, sentOff[attSide]);
       const gk = oppObj.L.GK[0] || { n: 'Kaleci' };
       const r = Math.random();
-      if (r < 0.55) {
+      const cardThresh = 1 - (attSide === 0 ? matchup.cardProbB : matchup.cardProbA);
+      if (r < 0.53) {
         scheduledByMin[m].push({ type: 'save', side: attSide, min: m, player: shooter, gk });
-      } else if (r < 0.82) {
+      } else if (r < 0.8) {
         scheduledByMin[m].push({ type: 'miss', side: attSide, min: m, player: shooter });
-      } else if (r < 0.92) {
+      } else if (r < cardThresh) {
         scheduledByMin[m].push({ type: 'post', side: attSide, min: m, player: shooter });
       } else {
         const defList = oppObj.L.DEF.length ? oppObj.L.DEF : oppObj.L.MID;
@@ -479,6 +537,8 @@ export function createInitialMatchState(
     speed: 1,
     leagueWeekRecorded: false,
     careerWeek: lg ? lg.week : 1,
+    tacticsA: teams[a]?.tactics || (teams[a]?.isHuman ? DEFAULT_TACTICS : pickAiTacticsForTeam(teams[a])),
+    tacticsB: teams[b]?.tactics || (teams[b]?.isHuman ? DEFAULT_TACTICS : pickAiTacticsForTeam(teams[b])),
   };
 }
 

@@ -20,7 +20,17 @@ interface ClubSelectViewProps {
   net: NetStateSnapshot;
   onToggleLeague: (lgId: string) => void;
   onToggleClub: (club: string) => void;
-  onSelectPreset: (preset: 'all' | 'pl' | 'bundesliga' | 'seriea' | 'superlig' | 'iconic' | 'clear') => void;
+  onSelectPreset: (
+    preset:
+      | 'all'
+      | 'pl'
+      | 'bundesliga'
+      | 'seriea'
+      | 'superlig'
+      | 'iconic'
+      | 'national_icons'
+      | 'clear'
+  ) => void;
   onBack: () => void;
   onStartDraft: () => void;
 }
@@ -45,7 +55,9 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
   const visibleModernClubs = useMemo(() => {
     return ALL_CLUBS.filter((c) => {
       const lg = CLUB_TO_LEAGUE[c] || 'Diğer Takımlar';
-      if (lg === 'İkonik Takımlar') return false;
+      if (lg === 'İkonik Takımlar' || lg === 'Milli İkonlar') {
+        return false;
+      }
       return leagues.has(lg);
     });
   }, [leagues]);
@@ -168,13 +180,22 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
                 </>
               )}
               {mode !== 'career' && (
-                <button
-                  type="button"
-                  onClick={() => onSelectPreset('iconic')}
-                  className="rounded border border-amber-400/50 bg-amber-900/40 px-2.5 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-800/60"
-                >
-                  İkonik Efsaneler (18)
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onSelectPreset('national_icons')}
+                    className="rounded border border-sky-400/50 bg-sky-900/40 px-2.5 py-1 text-xs font-semibold text-sky-200 hover:bg-sky-800/60"
+                  >
+                    20. YY Efsaneleri ({clubPlayerCounts['20. YY Efsaneleri'] || 79})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectPreset('iconic')}
+                    className="rounded border border-amber-400/50 bg-amber-900/40 px-2.5 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-800/60"
+                  >
+                    İkonik Kulüpler ({ICONIC_CLUBS.length})
+                  </button>
+                </>
               )}
               <button
                 type="button"
@@ -188,7 +209,11 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
         </div>
 
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-5">
-          {LEAGUES_META.filter((lg) => (mode === 'career' ? lg.id !== 'İkonik Takımlar' : true)).map(
+          {LEAGUES_META.filter((lg) =>
+            mode === 'career'
+              ? lg.id !== 'İkonik Takımlar' && lg.id !== 'Milli İkonlar'
+              : true
+          ).map(
             (lg) => {
               const active = leagues.has(lg.id);
               const clubsInLg = ALL_CLUBS.filter(
@@ -215,7 +240,9 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
                     {active && <span className="text-xs font-bold text-[var(--pri-bright)]">✓</span>}
                   </div>
                   <span className="mt-1 text-[11px] text-[var(--muted)]">
-                    {lg.country} · {clubsInLg.length} Kulüp
+                    {lg.id === 'Milli İkonlar'
+                      ? `${lg.country} · ${clubPlayerCounts['20. YY Efsaneleri'] || 79} Oyuncu`
+                      : `${lg.country} · ${clubsInLg.length} Kulüp`}
                   </span>
                 </button>
               );
@@ -269,7 +296,7 @@ export const ClubSelectView: React.FC<ClubSelectViewProps> = ({
       {mode !== 'career' && leagues.has('İkonik Takımlar') && (
         <div className="rounded-2xl border border-amber-500/35 bg-[var(--surface)] p-4 shadow-lg">
           <h2 className="mb-2.5 text-sm font-bold text-amber-200">
-            18 İkonik Efsane Kadro
+            {ICONIC_CLUBS.length} İkonik Efsane Kadro
           </h2>
           <div className="flex flex-wrap gap-2">
             {ICONIC_CLUBS.map((club) => {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AuctionDraftView } from './components/AuctionDraftView';
 import { CareerHubView } from './components/CareerHubView';
 import { CareerLeagueSelectorView } from './components/CareerLeagueSelectorView';
 import { ClubSelectView } from './components/ClubSelectView';
@@ -9,6 +10,7 @@ import { LineupView } from './components/LineupView';
 import { MatchView } from './components/MatchView';
 import { OnlineModal } from './components/OnlineModal';
 import { SetupView } from './components/SetupView';
+import { TacticsView } from './components/TacticsView';
 import {
   ALL_CLUBS,
   CLUB_TO_LEAGUE,
@@ -20,6 +22,8 @@ import {
 import { onlineNet, type NetEnvelope } from './services/onlineNet';
 import type {
   AppView,
+  AuctionNominationMode,
+  AuctionState,
   CareerEventChoice,
   DraftState,
   FormationName,
@@ -29,11 +33,23 @@ import type {
   LeagueTab,
   MatchState,
   NetStateSnapshot,
+  PendingMatchContext,
   TeamCareerState,
+  TeamTactics,
   TournamentState,
   WheelState,
 } from './types/game';
 import { UCL_BRAND_LOGOS } from './data/logos';
+import {
+  advanceAfterAuctionSold,
+  autoCompleteAuctionDraft,
+  decideAiAuctionAction,
+  initAuctionState,
+  nominatePlayerForAuction,
+  passAuctionLot,
+  pickAiPlayerToNominate,
+  placeAuctionBid,
+} from './utils/auctionLogic';
 import {
   acceptPressConference,
   answerPressConferenceQuestion,
@@ -146,14 +162,20 @@ export default function App() {
   const [strictPos, setStrictPos] = useState<boolean>(true);
   const [teamName, setTeamName] = useState<string>('1. Oyuncu');
   const [careerLeague, setCareerLeague] = useState<string>('Premier Lig');
+  const [auctionNominationMode, setAuctionNominationMode] =
+    useState<AuctionNominationMode>('player');
+  const [auctionBudget, setAuctionBudget] = useState<number>(200);
   const [setupErr, setSetupErr] = useState<string>('');
   const [swapErr, setSwapErr] = useState<string>('');
+  const [auctionErr, setAuctionErr] = useState<string>('');
 
   const [onlineModalOpen, setOnlineModalOpen] = useState<boolean>(false);
   const [onlineMsg, setOnlineMsg] = useState<string>('');
   const [net, setNet] = useState<NetStateSnapshot>(onlineNet.snapshot);
 
   const [draft, setDraft] = useState<DraftState | null>(null);
+  const [auction, setAuction] = useState<AuctionState | null>(null);
+  const [pendingMatch, setPendingMatch] = useState<PendingMatchContext | null>(null);
   const [wheel, setWheel] = useState<WheelState>({
     spinning: false,
     angle: 0,
@@ -168,6 +190,7 @@ export default function App() {
 
   const wheelRafRef = useRef<number | null>(null);
   const cpuTimerRef = useRef<number | null>(null);
+  const auctionTimerRef = useRef<number | null>(null);
   const matchTimerRef = useRef<number | null>(null);
 
   // Refs to access fresh state inside event/interval callbacks without tearing down listeners
@@ -182,7 +205,11 @@ export default function App() {
     strictPos,
     teamName,
     careerLeague,
+    auctionNominationMode,
+    auctionBudget,
     draft,
+    auction,
+    pendingMatch,
     wheel,
     tournament,
     league,
@@ -200,7 +227,11 @@ export default function App() {
     strictPos,
     teamName,
     careerLeague,
+    auctionNominationMode,
+    auctionBudget,
     draft,
+    auction,
+    pendingMatch,
     wheel,
     tournament,
     league,
@@ -222,6 +253,7 @@ export default function App() {
     return () => {
       if (wheelRafRef.current != null) cancelAnimationFrame(wheelRafRef.current);
       if (cpuTimerRef.current != null) window.clearTimeout(cpuTimerRef.current);
+      if (auctionTimerRef.current != null) window.clearTimeout(auctionTimerRef.current);
       if (matchTimerRef.current != null) window.clearInterval(matchTimerRef.current);
     };
   }, []);
@@ -383,6 +415,7 @@ export default function App() {
       );
 
       onlineNet.resetReady();
+      setPendingMatch(null);
       setDraft(cloned);
       setMatch(mState);
       setView('match');
@@ -400,6 +433,24 @@ export default function App() {
       }
     },
     []
+  );
+
+  const openPreMatchTactics = useCallback(
+    (a: number, b: number, tourneyMatchId: string | null = null) => {
+      const { draft: curDraft, league: curLeague, net: curNet } = stateRef.current;
+      if (!curDraft) return;
+      if (curNet.connected) {
+        setupMatch(a, b, tourneyMatchId);
+        return;
+      }
+      const isCareer = !!curDraft.m.career;
+      const cloned = cloneDraftState(curDraft);
+      cloned.teams.forEach((tm) => ensureTeamLineup(tm, curLeague, isCareer));
+      setDraft(cloned);
+      setPendingMatch({ a, b, tourneyMatchId });
+      setView('tactics');
+    },
+    [setupMatch]
   );
 
   const handleFinishInstantly = useCallback((fromNet = false) => {
@@ -494,6 +545,7 @@ export default function App() {
   const executeStartDraft = useCallback(() => {
     const st = stateRef.current;
     setSetupErr('');
+    setAuctionErr('');
     const res = buildDraftState({
       mode: st.mode,
       leagues: st.leagues,
@@ -504,6 +556,7 @@ export default function App() {
       strictPos: st.strictPos,
       netConnected: st.net.connected,
       myTeamIdx: st.net.myTeamIdx,
+      auctionBudget: st.auctionBudget,
     });
     if (!res.state) {
       setSetupErr(res.error);
@@ -543,6 +596,12 @@ export default function App() {
 
     setLeagues(res.effectiveLeagues);
     setDraft(d);
+    if (d.m.auction) {
+      setAuction(initAuctionState(d, st.auctionNominationMode, st.auctionBudget, st.strictPos));
+    } else {
+      setAuction(null);
+    }
+    setPendingMatch(null);
     setTournament(null);
     setLeague(null);
     setMatch(null);
@@ -653,8 +712,8 @@ export default function App() {
       }
       return;
     }
-    setupMatch(userMatch.a, userMatch.b, null);
-  }, [setupMatch]);
+    openPreMatchTactics(userMatch.a, userMatch.b, null);
+  }, [openPreMatchTactics]);
 
   const resetAllToSetup = useCallback(() => {
     if (matchTimerRef.current != null) {
@@ -665,17 +724,24 @@ export default function App() {
       window.clearTimeout(cpuTimerRef.current);
       cpuTimerRef.current = null;
     }
+    if (auctionTimerRef.current != null) {
+      window.clearTimeout(auctionTimerRef.current);
+      auctionTimerRef.current = null;
+    }
     if (wheelRafRef.current != null) {
       cancelAnimationFrame(wheelRafRef.current);
       wheelRafRef.current = null;
     }
     onlineNet.resetReady();
     setDraft(null);
+    setAuction(null);
+    setPendingMatch(null);
     setTournament(null);
     setLeague(null);
     setMatch(null);
     setSetupErr('');
     setSwapErr('');
+    setAuctionErr('');
     setView('setup');
   }, []);
 
@@ -702,7 +768,7 @@ export default function App() {
           (curDraft.teams[m.a]?.isHuman || curDraft.teams[m.b]?.isHuman)
       );
       if (nextHumanMatch) {
-        setupMatch(nextHumanMatch.a, nextHumanMatch.b, null);
+        openPreMatchTactics(nextHumanMatch.a, nextHumanMatch.b, null);
         return;
       }
       onlineNet.resetReady();
@@ -725,7 +791,7 @@ export default function App() {
 
     const actMatch = getActiveTournamentMatch(curTourney);
     if (actMatch && !actMatch.done && actMatch.a != null && actMatch.b != null) {
-      setupMatch(actMatch.a, actMatch.b, actMatch.id);
+      openPreMatchTactics(actMatch.a, actMatch.b, actMatch.id);
       return;
     }
 
@@ -733,7 +799,7 @@ export default function App() {
       onlineNet.send({ type: 'PHASE_ADVANCE', to: 'setup' });
     }
     resetAllToSetup();
-  }, [setupMatch, resetAllToSetup]);
+  }, [openPreMatchTactics, resetAllToSetup]);
 
   // Host Lockstep Coordinator: whenever BOTH players mark Ready for the active phase, advance both players together!
   useEffect(() => {
@@ -1175,13 +1241,13 @@ export default function App() {
     }
   }, []);
 
-  // CPU draft turn loop
+  // CPU draft turn loop (standard modes only)
   useEffect(() => {
     if (cpuTimerRef.current != null) {
       window.clearTimeout(cpuTimerRef.current);
       cpuTimerRef.current = null;
     }
-    if (view !== 'draft' || !draft || draft.k >= draft.order.length) return;
+    if (view !== 'draft' || !draft || draft.m.auction || draft.k >= draft.order.length) return;
     const ti = draft.order[draft.k];
     const activeTeam = draft.teams[ti];
     if (!activeTeam || activeTeam.isHuman) return;
@@ -1189,7 +1255,7 @@ export default function App() {
 
     cpuTimerRef.current = window.setTimeout(() => {
       const cur = stateRef.current;
-      if (!cur.draft || cur.draft.k >= cur.draft.order.length) return;
+      if (!cur.draft || cur.draft.m.auction || cur.draft.k >= cur.draft.order.length) return;
       const curTi = cur.draft.order[cur.draft.k];
       const curTeam = cur.draft.teams[curTi];
       if (!curTeam || curTeam.isHuman) return;
@@ -1209,6 +1275,91 @@ export default function App() {
       }
     };
   }, [view, draft, net.connected, net.role, applyPickDirectly]);
+
+  // Auction Draft AI & transition loop
+  useEffect(() => {
+    if (auctionTimerRef.current != null) {
+      window.clearTimeout(auctionTimerRef.current);
+      auctionTimerRef.current = null;
+    }
+    if (view !== 'draft' || !draft || !draft.m.auction || !auction) return;
+    if (auction.phase === 'done') return;
+
+    if (auction.phase === 'sold_flash') {
+      auctionTimerRef.current = window.setTimeout(() => {
+        const cur = stateRef.current;
+        if (!cur.draft || !cur.auction || cur.auction.phase !== 'sold_flash') return;
+        const nextAuc = advanceAfterAuctionSold(cur.draft, cur.auction, cur.strictPos);
+        if (nextAuc.phase === 'done') {
+          const cloned = cloneDraftState(cur.draft);
+          cloned.teams.forEach((t) => ensureTeamLineup(t, null, false));
+          setDraft(cloned);
+          if (!cloned.m.career) setTournament(initTournamentState(cloned.teams));
+        }
+        setAuction(nextAuc);
+      }, 1350);
+    } else if (
+      auction.phase === 'nominating' &&
+      auction.nominationMode === 'player' &&
+      !draft.teams[auction.nominatorIdx]?.isHuman
+    ) {
+      auctionTimerRef.current = window.setTimeout(() => {
+        const cur = stateRef.current;
+        if (!cur.draft || !cur.auction || cur.auction.phase !== 'nominating') return;
+        const cloned = cloneDraftState(cur.draft);
+        const pick = pickAiPlayerToNominate(
+          cloned,
+          cur.auction,
+          cur.auction.nominatorIdx,
+          cur.strictPos
+        );
+        if (!pick) {
+          cloned.teams.forEach((t) => ensureTeamLineup(t, null, false));
+          setDraft(cloned);
+          if (!cloned.m.career) setTournament(initTournamentState(cloned.teams));
+          setAuction({ ...cur.auction, phase: 'done', activePlayer: null });
+          return;
+        }
+        const res = nominatePlayerForAuction(cloned, cur.auction, pick, 1, cur.strictPos);
+        if (res.auction.phase === 'done') {
+          res.draft.teams.forEach((t) => ensureTeamLineup(t, null, false));
+          if (!res.draft.m.career) setTournament(initTournamentState(res.draft.teams));
+        }
+        setDraft(res.draft);
+        setAuction(res.auction);
+        setAuctionErr('');
+      }, 420);
+    } else if (
+      auction.phase === 'bidding' &&
+      !draft.teams[auction.activeBidderIdx]?.isHuman
+    ) {
+      auctionTimerRef.current = window.setTimeout(() => {
+        const cur = stateRef.current;
+        if (!cur.draft || !cur.auction || cur.auction.phase !== 'bidding') return;
+        const cloned = cloneDraftState(cur.draft);
+        const bidderIdx = cur.auction.activeBidderIdx;
+        const decision = decideAiAuctionAction(cloned, cur.auction, bidderIdx, cur.strictPos);
+        const res =
+          decision.action === 'bid'
+            ? placeAuctionBid(cloned, cur.auction, bidderIdx, decision.amount, cur.strictPos)
+            : passAuctionLot(cloned, cur.auction, bidderIdx, cur.strictPos);
+        if (res.auction.phase === 'done') {
+          res.draft.teams.forEach((t) => ensureTeamLineup(t, null, false));
+          if (!res.draft.m.career) setTournament(initTournamentState(res.draft.teams));
+        }
+        setDraft(res.draft);
+        setAuction(res.auction);
+        setAuctionErr('');
+      }, 450);
+    }
+
+    return () => {
+      if (auctionTimerRef.current != null) {
+        window.clearTimeout(auctionTimerRef.current);
+        auctionTimerRef.current = null;
+      }
+    };
+  }, [view, draft, auction]);
 
   // Match minute interval simulation
   useEffect(() => {
@@ -1320,10 +1471,17 @@ export default function App() {
       nextC = new Set(ICONIC_CLUBS);
     } else if (modeId === 'career') {
       nextL.delete('İkonik Takımlar');
+      nextL.delete('Milli İkonlar');
       if (nextL.size === 0) {
         MODERN_LEAGUES.forEach((l) => nextL.add(l));
       }
-      nextC = new Set([...clubs].filter((c) => CLUB_TO_LEAGUE[c] !== 'İkonik Takımlar'));
+      nextC = new Set(
+        [...clubs].filter(
+          (c) =>
+            CLUB_TO_LEAGUE[c] !== 'İkonik Takımlar' &&
+            CLUB_TO_LEAGUE[c] !== 'Milli İkonlar'
+        )
+      );
       nextOpp = 1;
       setOpp(1);
     } else {
@@ -1603,10 +1761,95 @@ export default function App() {
     if (!tournament) setTournament(nextTourney);
     const actMatch = getActiveTournamentMatch(nextTourney);
     if (actMatch && actMatch.a != null && actMatch.b != null) {
-      setupMatch(actMatch.a, actMatch.b, actMatch.id);
+      openPreMatchTactics(actMatch.a, actMatch.b, actMatch.id);
     } else {
-      setupMatch(0, 1);
+      openPreMatchTactics(0, 1);
     }
+  };
+
+  const handleAuctionNominate = (playerId: number, openingBid: number) => {
+    if (!draft || !auction) return;
+    const p = PLAYERS_BY_ID[playerId];
+    if (!p) return;
+    const cloned = cloneDraftState(draft);
+    const res = nominatePlayerForAuction(cloned, auction, p, openingBid, strictPos);
+    if (res.error) {
+      setAuctionErr(res.error);
+      return;
+    }
+    setAuctionErr('');
+    if (res.auction.phase === 'done') {
+      res.draft.teams.forEach((t) => ensureTeamLineup(t, null, false));
+      if (!res.draft.m.career) setTournament(initTournamentState(res.draft.teams));
+    }
+    setDraft(res.draft);
+    setAuction(res.auction);
+  };
+
+  const handleAuctionBid = (teamIdx: number, amount: number) => {
+    if (!draft || !auction) return;
+    const cloned = cloneDraftState(draft);
+    const res = placeAuctionBid(cloned, auction, teamIdx, amount, strictPos);
+    if (res.error) {
+      setAuctionErr(res.error);
+      return;
+    }
+    setAuctionErr('');
+    if (res.auction.phase === 'done') {
+      res.draft.teams.forEach((t) => ensureTeamLineup(t, null, false));
+      if (!res.draft.m.career) setTournament(initTournamentState(res.draft.teams));
+    }
+    setDraft(res.draft);
+    setAuction(res.auction);
+  };
+
+  const handleAuctionPass = (teamIdx: number) => {
+    if (!draft || !auction) return;
+    const cloned = cloneDraftState(draft);
+    const res = passAuctionLot(cloned, auction, teamIdx, strictPos);
+    setAuctionErr('');
+    if (res.auction.phase === 'done') {
+      res.draft.teams.forEach((t) => ensureTeamLineup(t, null, false));
+      if (!res.draft.m.career) setTournament(initTournamentState(res.draft.teams));
+    }
+    setDraft(res.draft);
+    setAuction(res.auction);
+  };
+
+  const handleAuctionAdvanceSold = () => {
+    if (!draft || !auction) return;
+    const nextAuc = advanceAfterAuctionSold(draft, auction, strictPos);
+    if (nextAuc.phase === 'done') {
+      const cloned = cloneDraftState(draft);
+      cloned.teams.forEach((t) => ensureTeamLineup(t, null, false));
+      setDraft(cloned);
+      if (!cloned.m.career) setTournament(initTournamentState(cloned.teams));
+    }
+    setAuctionErr('');
+    setAuction(nextAuc);
+  };
+
+  const handleAuctionAutoComplete = () => {
+    if (!draft || !auction) return;
+    const cloned = cloneDraftState(draft);
+    const res = autoCompleteAuctionDraft(cloned, auction, strictPos);
+    res.draft.teams.forEach((t) => ensureTeamLineup(t, null, false));
+    if (!res.draft.m.career) {
+      setTournament(initTournamentState(res.draft.teams));
+    }
+    setAuctionErr('');
+    setDraft(res.draft);
+    setAuction(res.auction);
+    setView('identity');
+  };
+
+  const handleUpdateTactics = (teamIdx: number, nextTactics: TeamTactics) => {
+    if (!draft) return;
+    const cloned = cloneDraftState(draft);
+    const tm = cloned.teams[teamIdx];
+    if (!tm) return;
+    tm.tactics = { ...nextTactics };
+    setDraft(cloned);
   };
 
   const handleSelectPremierLeague = (chosenLeague?: string) => {
@@ -1646,6 +1889,10 @@ export default function App() {
 
   const handleGoMatchDirect = () => {
     if (!draft) return;
+    if (draft.m.auction && auction && auction.phase !== 'done') {
+      handleAuctionAutoComplete();
+      return;
+    }
     if (draft.k < draft.order.length) {
       handleAutoCompleteDraft();
       return;
@@ -1659,9 +1906,9 @@ export default function App() {
     if (!tournament) setTournament(nextTourney);
     const actMatch = getActiveTournamentMatch(nextTourney);
     if (actMatch && actMatch.a != null && actMatch.b != null) {
-      setupMatch(actMatch.a, actMatch.b, actMatch.id);
+      openPreMatchTactics(actMatch.a, actMatch.b, actMatch.id);
     } else {
-      setupMatch(0, 1);
+      openPreMatchTactics(0, 1);
     }
   };
 
@@ -1758,6 +2005,8 @@ export default function App() {
             strictPos={strictPos}
             teamName={teamName}
             careerLeague={careerLeague}
+            auctionNominationMode={auctionNominationMode}
+            auctionBudget={auctionBudget}
             err={setupErr}
             net={net}
             onSelectMode={handleSelectMode}
@@ -1779,6 +2028,8 @@ export default function App() {
               setCareerLeague(lgName);
               broadcastSetupSync({ careerLeague: lgName });
             }}
+            onChangeAuctionNominationMode={setAuctionNominationMode}
+            onChangeAuctionBudget={setAuctionBudget}
             onContinueToClubs={handleContinueToClubs}
           />
         )}
@@ -1823,6 +2074,8 @@ export default function App() {
               } else if (preset === 'iconic') {
                 nextL = new Set(['İkonik Takımlar']);
                 nextC = new Set(ICONIC_CLUBS);
+              } else if (preset === 'national_icons') {
+                nextL = new Set(['Milli İkonlar']);
               }
               setLeagues(nextL);
               setClubs(nextC);
@@ -1833,7 +2086,31 @@ export default function App() {
           />
         )}
 
-        {view === 'draft' && draft && (
+        {view === 'draft' && draft && draft.m.auction && auction && (
+          <AuctionDraftView
+            draft={draft}
+            auction={auction}
+            strictPos={strictPos}
+            errorMsg={auctionErr}
+            onNominatePlayer={handleAuctionNominate}
+            onPlaceBid={handleAuctionBid}
+            onPassLot={handleAuctionPass}
+            onAdvanceSold={handleAuctionAdvanceSold}
+            onAutoComplete={handleAuctionAutoComplete}
+            onProceedAfterDraft={() => {
+              const cloned = cloneDraftState(draft);
+              cloned.teams.forEach((t) => ensureTeamLineup(t, null, false));
+              setDraft(cloned);
+              if (!cloned.m.career && !tournament) {
+                setTournament(initTournamentState(cloned.teams));
+              }
+              setView('identity');
+            }}
+            onResetToSetup={handleResetToSetup}
+          />
+        )}
+
+        {view === 'draft' && draft && !draft.m.auction && (
           <DraftView
             draft={draft}
             wheel={wheel}
@@ -1986,6 +2263,23 @@ export default function App() {
           />
         )}
 
+        {view === 'tactics' && draft && pendingMatch && (
+          <TacticsView
+            draft={draft}
+            league={league}
+            pendingMatch={pendingMatch}
+            net={net}
+            onUpdateTactics={handleUpdateTactics}
+            onBackToLineup={() => {
+              setPendingMatch(null);
+              setView(draft.m.career && league ? 'league_hub' : 'result');
+            }}
+            onStartMatch={() =>
+              setupMatch(pendingMatch.a, pendingMatch.b, pendingMatch.tourneyMatchId)
+            }
+          />
+        )}
+
         {view === 'match' && draft && match && (
           <MatchView
             draft={draft}
@@ -2024,7 +2318,7 @@ export default function App() {
                 markReadyForPhase(`match_done_${matchKey}`);
                 return;
               }
-              setupMatch(a, b, id);
+              openPreMatchTactics(a, b, id);
             }}
             onBackAfterMatch={() => {
               if (net.connected) {

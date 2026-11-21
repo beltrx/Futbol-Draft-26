@@ -16,6 +16,7 @@ import type {
   Position,
   Team,
 } from '../types/game';
+import { DEFAULT_TACTICS } from './tacticsLogic';
 
 export function cost(p: Player): number {
   return p ? (p.price || 10) : 10;
@@ -249,8 +250,10 @@ export function siblingIds(g: DraftState, p: Player): number[] {
     });
   }
   const grp = g.nameGroups[nameKey(p.n)] || [p];
-  const hasIconic = grp.some((q) => q.lg === 'İkonik Takımlar');
-  return hasIconic ? grp.map((q) => q.id) : [p.id];
+  const hasSharedPool = grp.some(
+    (q) => q.lg === 'İkonik Takımlar' || q.lg === 'Milli İkonlar'
+  );
+  return hasSharedPool ? grp.map((q) => q.id) : [p.id];
 }
 
 export function getModeDef(modeId: GameModeId): GameModeDef {
@@ -267,6 +270,7 @@ export interface BuildDraftParams {
   strictPos: boolean;
   netConnected?: boolean;
   myTeamIdx?: number;
+  auctionBudget?: number;
 }
 
 export function buildDraftState(
@@ -318,8 +322,10 @@ export function buildDraftState(
     }
   }
 
-  let activeBudget: number | null = m.budget || null;
-  if (activeBudget) {
+  let activeBudget: number | null = m.auction
+    ? params.auctionBudget || m.budget || 200
+    : m.budget || null;
+  if (activeBudget && !m.auction) {
     const cheapestPool = pool.map(cost).sort((a, b) => a - b);
     const min14Cost = cheapestPool.slice(0, n * ROUNDS).reduce((s, c) => s + c, 0) / n;
     if (min14Cost + 40 > activeBudget) {
@@ -367,6 +373,7 @@ export function buildDraftState(
       bench: null,
       formation: '4-3-3',
       spent: 0,
+      tactics: { ...DEFAULT_TACTICS },
     });
   }
 
@@ -505,6 +512,7 @@ export function cloneDraftState(g: DraftState): DraftState {
       picks: [...tm.picks],
       starters: tm.starters ? [...tm.starters] : null,
       bench: tm.bench ? [...tm.bench] : null,
+      tactics: tm.tactics ? { ...tm.tactics } : undefined,
     })),
   };
 }

@@ -18,12 +18,13 @@ export const ClubLogo: React.FC<ClubLogoProps> = ({ club, size = 20, className =
       customUri.startsWith('/') && !customUri.startsWith('//')
         ? `.${customUri}`
         : customUri;
+    const isFlag = customUri.includes('/assets/flags/');
     return (
       <img
         src={resolvedSrc}
         alt={club}
-        width={size}
-        height={size}
+        width={isFlag ? Math.round(size * 1.2) : size}
+        height={isFlag ? Math.round(size * 0.8) : size}
         onError={(e) => {
           const img = e.currentTarget;
           if (customUri.startsWith('/') && !img.dataset.fallbackTried) {
@@ -31,8 +32,16 @@ export const ClubLogo: React.FC<ClubLogoProps> = ({ club, size = 20, className =
             img.src = `./public${customUri}`;
           }
         }}
-        className={`inline-block shrink-0 object-contain drop-shadow-sm ${className}`}
-        style={{ width: size, height: size }}
+        className={`inline-block shrink-0 ${
+          isFlag
+            ? 'rounded-[2px] object-cover ring-1 ring-white/20 shadow-sm'
+            : 'object-contain drop-shadow-sm'
+        } ${className}`}
+        style={
+          isFlag
+            ? { width: Math.round(size * 1.2), height: Math.round(size * 0.8) }
+            : { width: size, height: size }
+        }
       />
     );
   }

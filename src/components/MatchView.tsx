@@ -11,6 +11,7 @@ import type {
 } from '../types/game';
 import { getUclWeekTitle } from '../utils/careerLogic';
 import { getActiveTournamentMatch } from '../utils/matchEngine';
+import { formatTacticsBrief } from '../utils/tacticsLogic';
 import { OnlineReadyBadges, TeamIdentityBadge } from './ClubBadge';
 
 interface MatchViewProps {
@@ -170,6 +171,11 @@ export const MatchView: React.FC<MatchViewProps> = ({
               <div className="truncate font-disp text-lg font-extrabold text-white sm:text-xl">
                 {teamA?.name}
               </div>
+              {match.tacticsA && (
+                <div className="truncate text-[10px] text-[var(--muted)]">
+                  {formatTacticsBrief(match.tacticsA)}
+                </div>
+              )}
             </div>
             <TeamIdentityBadge team={teamA} size={46} className="shrink-0" />
           </div>
@@ -202,6 +208,11 @@ export const MatchView: React.FC<MatchViewProps> = ({
               <div className="truncate font-disp text-lg font-extrabold text-white sm:text-xl">
                 {teamB?.name}
               </div>
+              {match.tacticsB && (
+                <div className="truncate text-[10px] text-[var(--muted)]">
+                  {formatTacticsBrief(match.tacticsB)}
+                </div>
+              )}
             </div>
           </div>
         </div>

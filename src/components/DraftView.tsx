@@ -131,7 +131,15 @@ export const DraftView: React.FC<DraftViewProps> = ({
       .filter((p) => !leagueFilter || p.lg === leagueFilter)
       .filter((p) => !clubFilter || p.c === clubFilter)
       .filter((p) => !posFilter || p.pos === posFilter)
-      .filter((p) => !q || p.n.toLowerCase().includes(q) || p.c.toLowerCase().includes(q))
+      .filter(
+        (p) =>
+          !q ||
+          p.n.toLowerCase().includes(q) ||
+          p.c.toLowerCase().includes(q) ||
+          (p.nat && p.nat.toLowerCase().includes(q)) ||
+          (p.trait && p.trait.toLowerCase().includes(q)) ||
+          (p.role && p.role.toLowerCase().includes(q))
+      )
       .sort((a, b) => a.n.localeCompare(b.n, 'tr'));
   }, [draft.pool, draft.taken, leagueFilter, clubFilter, posFilter, searchQ]);
 
@@ -395,7 +403,7 @@ export const DraftView: React.FC<DraftViewProps> = ({
                   setSearchQ(e.target.value);
                   setPage(1);
                 }}
-                placeholder="Oyuncu veya kulüp ara (A-Z sıralı)..."
+                placeholder="Oyuncu, kulüp, uyruk veya özellik ara..."
                 className="min-w-[180px] flex-1 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-xs text-[var(--fg)] focus:border-[var(--pri-bright)] focus:outline-none"
               />
 
@@ -500,6 +508,7 @@ export const DraftView: React.FC<DraftViewProps> = ({
                   <tr>
                     <th className="px-3 py-2">Oyuncu (A-Z)</th>
                     <th className="px-2 py-2">Kulüp</th>
+                    <th className="hidden px-2 py-2 sm:table-cell">Uyruk · Özellik</th>
                     <th className="px-2 py-2">Mevki</th>
                     {draft.m.budget && <th className="px-2 py-2 text-right">Değer</th>}
                     <th className="px-3 py-2 text-right">İşlem</th>
@@ -524,8 +533,17 @@ export const DraftView: React.FC<DraftViewProps> = ({
                         <td className="px-2 py-2">
                           <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
                             <ClubLogo club={p.c} size={16} />
-                            <span className="max-w-[130px] truncate">{p.c}</span>
+                            <span className="max-w-[125px] truncate">{p.c}</span>
                           </span>
+                        </td>
+                        <td className="hidden px-2 py-2 text-[11px] text-[var(--muted)] sm:table-cell">
+                          <span className="text-[var(--fg)]">{p.nat || '—'}</span>
+                          {p.trait && (
+                            <span className="ml-1.5 text-[var(--muted)]">
+                              · {p.trait}
+                              {p.role ? ` / ${p.role}` : ''}
+                            </span>
+                          )}
                         </td>
                         <td className="px-2 py-2">
                           <PosBadge pos={p.pos} />
@@ -552,7 +570,7 @@ export const DraftView: React.FC<DraftViewProps> = ({
                   {filteredPool.length === 0 && (
                     <tr>
                       <td
-                        colSpan={draft.m.budget ? 5 : 4}
+                        colSpan={draft.m.budget ? 6 : 5}
                         className="px-4 py-6 text-center text-[var(--muted)]"
                       >
                         Arama kriterine uygun boşta oyuncu bulunamadı.

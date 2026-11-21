@@ -20,6 +20,31 @@ export interface Player {
   r: number;
   pos: Position;
   price: number;
+  nat?: string;
+  age?: number | null;
+  trait?: string;
+  role?: string;
+  isNationalIcon?: boolean;
+}
+
+export type PressIntensity = 'low' | 'mid' | 'high';
+export type DefensiveLine = 'deep' | 'standard' | 'high';
+export type TacklingApproach = 'cautious' | 'balanced' | 'aggressive';
+export type CounterPress = 'on' | 'off';
+export type BuildUpStyle = 'short' | 'mixed' | 'direct';
+export type AttackTempo = 'patient' | 'balanced' | 'fast';
+export type AttackWidth = 'narrow' | 'normal' | 'wide';
+export type FinalThirdInstruction = 'box' | 'space' | 'counter';
+
+export interface TeamTactics {
+  pressIntensity: PressIntensity;
+  defensiveLine: DefensiveLine;
+  tackling: TacklingApproach;
+  counterPress: CounterPress;
+  buildUp: BuildUpStyle;
+  tempo: AttackTempo;
+  width: AttackWidth;
+  finalThird: FinalThirdInstruction;
 }
 
 export interface TeamCustomIdentity {
@@ -41,6 +66,7 @@ export interface Team {
   bench: Player[] | null;
   formation: FormationName;
   spent: number;
+  tactics?: TeamTactics;
 }
 
 export type GameModeId =
@@ -49,7 +75,8 @@ export type GameModeId =
   | 'wheel'
   | 'iconic'
   | 'club'
-  | 'budget';
+  | 'budget'
+  | 'auction';
 
 export interface GameModeDef {
   id: GameModeId;
@@ -62,7 +89,37 @@ export interface GameModeDef {
   career?: number;
   special?: number;
   wheel?: number;
+  auction?: number;
   iconicDefault?: number;
+}
+
+export type AuctionNominationMode = 'player' | 'ai';
+export type AuctionPhase = 'nominating' | 'bidding' | 'sold_flash' | 'done';
+
+export interface AuctionBidEntry {
+  teamIdx: number;
+  amount: number;
+  action: 'nominate' | 'bid' | 'pass';
+}
+
+export interface AuctionState {
+  nominationMode: AuctionNominationMode;
+  budgetPerTeam: number;
+  nominatorIdx: number;
+  phase: AuctionPhase;
+  activePlayer: Player | null;
+  currentBid: number;
+  highestBidderIdx: number | null;
+  activeBidderIdx: number;
+  passedTeams: number[];
+  lotNumber: number;
+  bidLog: AuctionBidEntry[];
+  lastSold: {
+    player: Player;
+    winnerIdx: number;
+    price: number;
+  } | null;
+  skippedIds: number[];
 }
 
 export interface DraftHistoryItem {
@@ -202,6 +259,14 @@ export interface MatchState {
   speed: 1 | 2 | 4;
   leagueWeekRecorded: boolean;
   careerWeek?: number;
+  tacticsA?: TeamTactics;
+  tacticsB?: TeamTactics;
+}
+
+export interface PendingMatchContext {
+  a: number;
+  b: number;
+  tourneyMatchId: string | null;
 }
 
 export interface TournamentMatch {
@@ -405,6 +470,7 @@ export type AppView =
   | 'draft'
   | 'identity'
   | 'result'
+  | 'tactics'
   | 'match'
   | 'league_select'
   | 'league_hub';
